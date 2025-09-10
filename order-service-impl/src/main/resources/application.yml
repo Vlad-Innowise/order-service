@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: 'order-service'
+
+  profiles:
+    active: "${APPLICATION_PROFILE}"
+
+  datasource:
+    url: "${DB_URL}"
+    username: "${DB_USER}"
+    password: "${DB_PASSWORD}"
+    hikari:
+      maximum-pool-size: 20
+
+  jpa:
+    hibernate:
+      ddl-auto: 'validate'
+    show-sql: 'true'
+    properties:
+      hibernate:
+        default_schema: 'app'
+
+  liquibase:
+    enabled: 'true'
+    change-log: 'classpath:/db/changelog/db.changelog-master.yml'
+    default-schema: 'app'
+
+logging:
+  level:
+    root: 'info'
+
+# Custom properties
+application:
+  security:
+    enabled: 'false'
+    secretKey: "${TOKEN_SECRET}"
