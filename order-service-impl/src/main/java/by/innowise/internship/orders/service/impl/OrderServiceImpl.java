@@ -2,6 +2,7 @@ package by.innowise.internship.orders.service.impl;
 
 import by.innowise.internship.orders.exception.ItemNotFoundException;
 import by.innowise.internship.orders.exception.NotUniqueOrderItemException;
+import by.innowise.internship.orders.exception.OrderNotFoundException;
 import by.innowise.internship.orders.mapper.OrderItemMapper;
 import by.innowise.internship.orders.mapper.OrderMapper;
 import by.innowise.internship.orders.model.dto.UserProfileDto;
@@ -21,12 +22,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -53,6 +56,16 @@ public class OrderServiceImpl implements OrderService {
         repository.saveAndFlush(toSave);
         log.info("Order: {} pre-saved with status: {}", toSave.getId(), toSave.getStatus());
         return calculateTotalsAndGetOrderResponse(toSave);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public OrderResponseDto getById(UUID id, Long userId) {
+        return repository.findByIdAndUserIdFetchOrderItems(id, userId)
+                         .map(this::calculateTotalsAndGetOrderResponse)
+                         .orElseThrow(() -> new OrderNotFoundException(
+                                 "Not found an order: {%s} for userid: {%s}".formatted(id, userId),
+                                 HttpStatus.BAD_REQUEST));
     }
 
     private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order) {
