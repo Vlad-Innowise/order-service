@@ -16,8 +16,9 @@ import java.util.UUID;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
-    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.id=:id")
-    Optional<Order> findByIdFetchOrderItems(@Param("id") UUID id);
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.id=:id AND o.userId=:userId")
+    Optional<Order> findByIdAndUserIdFetchOrderItems(@Param("id") UUID id,
+                                                     @Param("userId") Long userId);
 
     @EntityGraph(attributePaths = "orderItems")
     @Query("SELECT o FROM Order o WHERE o.id IN(:orderIds)")
