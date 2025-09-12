@@ -3,6 +3,7 @@ package by.innowise.internship.orders.mapper;
 import by.innowise.internship.orders.model.dto.item.ItemRequestDto;
 import by.innowise.internship.orders.model.dto.item.ItemResponseDto;
 import by.innowise.internship.orders.model.entity.Item;
+import by.innowise.internship.orders.service.dto.ItemSnapshot;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -24,4 +25,11 @@ public interface ItemMapper {
 
     ItemResponseDto toDto(Item e);
 
+    default ItemSnapshot toSnapshot(Item e) {
+        return ItemSnapshot.builder()
+                           .itemId(e.getId())
+                           .itemName(e.getName())
+                           .itemPrice(e.getPrice())
+                           .build();
+    }
 }

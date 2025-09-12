@@ -7,11 +7,16 @@ import by.innowise.internship.orders.model.dto.item.ItemResponseDto;
 import by.innowise.internship.orders.model.entity.Item;
 import by.innowise.internship.orders.repository.ItemRepository;
 import by.innowise.internship.orders.service.ItemService;
+import by.innowise.internship.orders.service.dto.ItemSnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collection;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -35,6 +40,17 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public ItemResponseDto getById(Long id) {
         return mapper.toDto(getItemById(id));
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Set<ItemSnapshot> getAllByIds(Collection<Long> idsToFind) {
+        log.info("Going to DB to find items with ids: {}", idsToFind);
+        Set<Item> foundItems = repository.findDistinctByIdIn(idsToFind);
+        log.info("Found Items: {}", foundItems);
+        return foundItems.stream()
+                         .map(mapper::toSnapshot)
+                         .collect(Collectors.toSet());
     }
 
     @Transactional
