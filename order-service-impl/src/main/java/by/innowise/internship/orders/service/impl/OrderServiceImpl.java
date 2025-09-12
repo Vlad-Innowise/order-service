@@ -4,7 +4,7 @@ import by.innowise.internship.orders.exception.ItemNotFoundException;
 import by.innowise.internship.orders.exception.NotUniqueOrderItemException;
 import by.innowise.internship.orders.mapper.OrderItemMapper;
 import by.innowise.internship.orders.mapper.OrderMapper;
-import by.innowise.internship.orders.model.UserProfileDto;
+import by.innowise.internship.orders.model.dto.UserProfileDto;
 import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoRequest;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoResponse;

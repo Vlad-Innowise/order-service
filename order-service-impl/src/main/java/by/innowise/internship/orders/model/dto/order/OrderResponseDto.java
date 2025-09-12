@@ -1,6 +1,6 @@
 package by.innowise.internship.orders.model.dto.order;
 
-import by.innowise.internship.orders.model.UserProfileDto;
+import by.innowise.internship.orders.model.dto.UserProfileDto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
