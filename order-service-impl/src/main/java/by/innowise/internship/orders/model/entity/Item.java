@@ -27,6 +27,7 @@ import java.math.BigDecimal;
 @Table(name = "items")
 public class Item extends BaseEntity {
 
+    @EqualsAndHashCode.Include
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
