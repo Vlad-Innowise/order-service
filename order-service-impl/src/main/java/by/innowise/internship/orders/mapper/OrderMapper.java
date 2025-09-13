@@ -27,10 +27,15 @@ public interface OrderMapper {
 
     @AfterMapping
     default void mapAdditionalProperties(@MappingTarget Order order, @Context Long userId) {
-        if (order != null) {
-            order.setId(UUID.randomUUID());
-            order.setUserId(userId);
+        if (order == null) {
+            return;
         }
+
+        if (order.getId() == null) {
+            order.setId(UUID.randomUUID());
+        }
+
+        order.setUserId(userId);
     }
 
     @Mapping(target = "user", expression = "java(user)")

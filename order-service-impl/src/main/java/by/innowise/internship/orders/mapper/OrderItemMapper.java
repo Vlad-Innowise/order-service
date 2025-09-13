@@ -25,10 +25,15 @@ public interface OrderItemMapper {
     @AfterMapping
     default void finishEntityMapping(@MappingTarget OrderItem orderItem,
                                      @Context ItemSnapshot itemSnapshot) {
-        if (orderItem != null) {
-            orderItem.setId(UUID.randomUUID());
-            orderItem.setItem(itemSnapshot);
+        if (orderItem == null) {
+            return;
         }
+
+        if (orderItem.getId() == null) {
+            orderItem.setId(UUID.randomUUID());
+        }
+
+        orderItem.setItem(itemSnapshot);
     }
 
     @Mapping(source = "item.itemId", target = "itemId")
