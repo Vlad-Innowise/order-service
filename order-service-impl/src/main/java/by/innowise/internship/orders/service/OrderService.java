@@ -17,4 +17,6 @@ public interface OrderService {
     List<OrderResponseDto> getAllByIds(List<UUID> orderIds, Long userId, Pageable pageable);
 
     List<OrderResponseDto> getAllByStatus(Long userId, OrderStatus status);
+
+    void delete(UUID orderId, Long userId);
 }

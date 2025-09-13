@@ -2,6 +2,7 @@ package by.innowise.internship.orders.service.impl;
 
 import by.innowise.internship.orders.exception.ItemNotFoundException;
 import by.innowise.internship.orders.exception.NotUniqueOrderItemException;
+import by.innowise.internship.orders.exception.OrderDeletionDeniedException;
 import by.innowise.internship.orders.exception.OrderNotFoundException;
 import by.innowise.internship.orders.mapper.OrderItemMapper;
 import by.innowise.internship.orders.mapper.OrderMapper;
@@ -107,6 +108,16 @@ public class OrderServiceImpl implements OrderService {
                           .toList();
     }
 
+    @Transactional
+    @Override
+    public void delete(UUID orderId, Long userId) {
+        log.info("Requested to delete the order with id {} for userid: {}", orderId, userId);
+        Order toDelete = getOrderByIdAndUserId(orderId, userId);
+        log.info("Invoking item repository to delete the order: {}", toDelete);
+        checkIfDeletionAllowed(orderId, toDelete);
+        repository.delete(toDelete);
+    }
+
     private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order) {
         List<OrderItemDtoResponse> calculatedOrderItemResponses = getOrderItemResponses(order);
         BigDecimal orderTotal = orderCalculator.calculateOrderTotal(order);
@@ -201,5 +212,15 @@ public class OrderServiceImpl implements OrderService {
     private Map<Long, ItemSnapshot> getSnapshotsMap(Set<ItemSnapshot> itemSnaphots) {
         return itemSnaphots.stream()
                            .collect(Collectors.toMap(ItemSnapshot::getItemId, Function.identity()));
+    }
+
+    private void checkIfDeletionAllowed(UUID orderId, Order toDelete) {
+        log.info("Checking the order's: {} status prior to deletion", orderId);
+        if (toDelete.getStatus() == OrderStatus.FINISHED) {
+            throw new OrderDeletionDeniedException(
+                    "The deletion of the order {%s} cannot be completed! Order is in [%s] status"
+                            .formatted(orderId, OrderStatus.FINISHED.name())
+                    , HttpStatus.BAD_REQUEST);
+        }
     }
 }
