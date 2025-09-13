@@ -20,11 +20,14 @@ import by.innowise.internship.orders.service.dto.ItemSnapshot;
 import by.innowise.internship.orders.service.facade.ItemFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,6 +69,32 @@ public class OrderServiceImpl implements OrderService {
                          .orElseThrow(() -> new OrderNotFoundException(
                                  "Not found an order: {%s} for userid: {%s}".formatted(id, userId),
                                  HttpStatus.BAD_REQUEST));
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<OrderResponseDto> getAllByIds(List<UUID> orderIds, Long userId, Pageable pageable) {
+        Set<UUID> idsToFind = new HashSet<>(orderIds);
+        log.info("Invoking order repository for ids: [{}]", idsToFind);
+        Page<Order> ordersPage = repository.findPageByIdsAndUserId(orderIds, userId, pageable);
+        Set<UUID> retrievedOrdersId = ordersPage.getContent()
+                                                .stream()
+                                                .map(Order::getId)
+                                                .collect(Collectors.toSet());
+
+        //fetching order items only -> can ignore a result list
+        List<UUID> missingOrderIds = idsToFind.stream()
+                                              .filter(initId -> !retrievedOrdersId.contains(initId))
+                                              .toList();
+
+        log.warn("{} order ids were not found", missingOrderIds);
+        repository.findByIdIn(retrievedOrdersId);
+        log.info("Retrieved orders: {} for userId: {}, page {} out of {}", ordersPage.getContent().size(), userId,
+                 ordersPage.getNumber() + 1, ordersPage.getTotalPages());
+        return ordersPage.getContent()
+                         .stream()
+                         .map(this::calculateTotalsAndGetOrderResponse)
+                         .toList();
     }
 
     private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order) {
