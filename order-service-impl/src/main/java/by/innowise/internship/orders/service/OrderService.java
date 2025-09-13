@@ -2,6 +2,7 @@ package by.innowise.internship.orders.service;
 
 import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderResponseDto;
+import by.innowise.internship.orders.model.entity.OrderStatus;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -14,4 +15,6 @@ public interface OrderService {
     OrderResponseDto getById(UUID id, Long userId);
 
     List<OrderResponseDto> getAllByIds(List<UUID> orderIds, Long userId, Pageable pageable);
+
+    List<OrderResponseDto> getAllByStatus(Long userId, OrderStatus status);
 }

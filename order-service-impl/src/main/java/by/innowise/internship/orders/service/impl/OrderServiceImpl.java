@@ -97,6 +97,19 @@ public class OrderServiceImpl implements OrderService {
                          .toList();
     }
 
+    @Override
+    public List<OrderResponseDto> getAllByStatus(Long userId, OrderStatus status) {
+        log.info("Getting orders with status: {} for user id: [{}]", status.name(), userId);
+        List<Order> foundOrders = repository.findAllByStatusAndUserIdFetchOrderItems(status, userId);
+        Set<UUID> retrievedOrdersId = foundOrders.stream()
+                                                 .map(Order::getId)
+                                                 .collect(Collectors.toSet());
+        log.info("Retrieved orders: {} for userId: {}", retrievedOrdersId, userId);
+        return foundOrders.stream()
+                          .map(this::calculateTotalsAndGetOrderResponse)
+                          .toList();
+    }
+
     private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order) {
         List<OrderItemDtoResponse> calculatedOrderItemResponses = getOrderItemResponses(order);
         BigDecimal orderTotal = orderCalculator.calculateOrderTotal(order);
