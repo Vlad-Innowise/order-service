@@ -64,11 +64,8 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     @Override
     public OrderResponseDto getById(UUID id, Long userId) {
-        return repository.findByIdAndUserIdFetchOrderItems(id, userId)
-                         .map(this::calculateTotalsAndGetOrderResponse)
-                         .orElseThrow(() -> new OrderNotFoundException(
-                                 "Not found an order: {%s} for userid: {%s}".formatted(id, userId),
-                                 HttpStatus.BAD_REQUEST));
+        Order found = getOrderByIdAndUserId(id, userId);
+        return calculateTotalsAndGetOrderResponse(found);
     }
 
     @Transactional(readOnly = true)
@@ -117,6 +114,16 @@ public class OrderServiceImpl implements OrderService {
                                  new UserProfileDto(order.getUserId()),
                                  calculatedOrderItemResponses,
                                  orderTotal);
+    }
+
+    private Order getOrderByIdAndUserId(UUID orderId, Long userId) {
+        log.info("Invoking DB to find order: {} for userid: {}", orderId, userId);
+        Order order = repository.findByIdAndUserIdFetchOrderItems(orderId, userId)
+                                .orElseThrow(() -> new OrderNotFoundException(
+                                        "Not found an order: {%s} for userid: {%s}".formatted(orderId, userId),
+                                        HttpStatus.BAD_REQUEST));
+        log.info("Found order: {}", order);
+        return order;
     }
 
     private List<OrderItemDtoResponse> getOrderItemResponses(Order order) {
