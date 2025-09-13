@@ -4,6 +4,7 @@ import by.innowise.internship.orders.model.dto.UserProfileDto;
 import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoResponse;
 import by.innowise.internship.orders.model.dto.order.OrderResponseDto;
+import by.innowise.internship.orders.model.dto.order.OrderUpdateDto;
 import by.innowise.internship.orders.model.entity.Order;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Context;
@@ -24,6 +25,12 @@ public interface OrderMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "status", ignore = true)
     Order toEntity(OrderCreateDto d, @Context Long userId);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "version", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Order updateEntity(OrderUpdateDto dto, @MappingTarget Order entity, @Context Long userId);
 
     @AfterMapping
     default void mapAdditionalProperties(@MappingTarget Order order, @Context Long userId) {

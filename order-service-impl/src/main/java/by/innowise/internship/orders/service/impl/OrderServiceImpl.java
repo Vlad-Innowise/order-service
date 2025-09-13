@@ -11,6 +11,7 @@ import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoRequest;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoResponse;
 import by.innowise.internship.orders.model.dto.order.OrderResponseDto;
+import by.innowise.internship.orders.model.dto.order.OrderUpdateDto;
 import by.innowise.internship.orders.model.entity.Order;
 import by.innowise.internship.orders.model.entity.OrderItem;
 import by.innowise.internship.orders.model.entity.OrderStatus;
@@ -18,6 +19,7 @@ import by.innowise.internship.orders.repository.OrderRepository;
 import by.innowise.internship.orders.service.OrderCalculator;
 import by.innowise.internship.orders.service.OrderService;
 import by.innowise.internship.orders.service.dto.ItemSnapshot;
+import by.innowise.internship.orders.service.dto.ItemsDiffResult;
 import by.innowise.internship.orders.service.facade.ItemFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -110,12 +112,108 @@ public class OrderServiceImpl implements OrderService {
 
     @Transactional
     @Override
+    public OrderResponseDto update(OrderUpdateDto updateDto, Long userId) {
+        log.info("Updating order: {} for userId: {}", updateDto.id(), userId);
+
+        Order orderToUpdate = getOrderByIdAndUserId(updateDto.id(), userId);
+        checkIfModificationAllowed(orderToUpdate);
+
+        ItemsDiffResult preUpdateDiffResult = getItemsDiffResult(updateDto, orderToUpdate);
+
+        createMissingOrderItems(updateDto, orderToUpdate, preUpdateDiffResult);
+        updateExistingOrderItems(updateDto, orderToUpdate, preUpdateDiffResult);
+        clearRemovedOrderItems(orderToUpdate, preUpdateDiffResult);
+
+        Order updatedOrder = orderMapper.updateEntity(updateDto, orderToUpdate, userId);
+        log.info("Merged order entity with order update dto: {}", updatedOrder);
+
+        repository.saveAndFlush(updatedOrder);
+        log.info("Updated order: {} pre-saved in DB", updatedOrder);
+        return calculateTotalsAndGetOrderResponse(updatedOrder);
+    }
+
+    @Transactional
+    @Override
     public void delete(UUID orderId, Long userId) {
         log.info("Requested to delete the order with id {} for userid: {}", orderId, userId);
         Order toDelete = getOrderByIdAndUserId(orderId, userId);
         log.info("Invoking item repository to delete the order: {}", toDelete);
         checkIfModificationAllowed(toDelete);
         repository.delete(toDelete);
+    }
+
+    private ItemsDiffResult getItemsDiffResult(OrderUpdateDto updateDto, Order orderToUpdate) {
+        Set<Long> incomingUniqueItemIds = getUniqueIncomingItemIds(updateDto.items());
+        checkIfNoDuplicatedOrderItems(updateDto.items(), incomingUniqueItemIds);
+
+        Set<Long> existingItemIds = orderToUpdate.getOrderItems()
+                                                 .stream()
+                                                 .map(oi -> oi.getItem().getItemId())
+                                                 .collect(Collectors.toSet());
+
+        ItemsDiffResult preUpdateDiffResult = new ItemsDiffResult(
+                calculateItemIdsToAdd(updateDto, existingItemIds),
+                calculateItemIdsToUpdate(updateDto, existingItemIds),
+                calculateItemIdsToRemove(orderToUpdate, incomingUniqueItemIds)
+        );
+        return preUpdateDiffResult;
+    }
+
+    private void createMissingOrderItems(OrderUpdateDto updateDto,
+                                         Order toUpdate,
+                                         ItemsDiffResult preUpdateDiffResult) {
+
+        Map<Long, ItemSnapshot> itemSnapshotsByItemId = fetchItemSnaphotsMapByItemIds(preUpdateDiffResult.toAdd());
+
+        updateDto.items()
+                 .stream()
+                 .filter(oiDto -> preUpdateDiffResult.toAdd().contains(oiDto.itemId()))
+                 .forEach(oiDto ->
+                                  mapToOrderItemAndAssign(toUpdate, oiDto, itemSnapshotsByItemId));
+    }
+
+    private void updateExistingOrderItems(OrderUpdateDto updateDto, Order order,
+                                          ItemsDiffResult preUpdateDiffResult) {
+        Map<Long, Integer> incomingQuantityByItemId =
+                updateDto.items()
+                         .stream()
+                         .collect(Collectors.toMap(OrderItemDtoRequest::itemId,
+                                                   OrderItemDtoRequest::quantity)
+                         );
+
+        order.getOrderItems()
+             .stream()
+             .filter(oi -> preUpdateDiffResult.toUpdate().contains(oi.getItem().getItemId()))
+             .forEach(oi -> oi.setQuantity(incomingQuantityByItemId.get(oi.getItem().getItemId())));
+    }
+
+    private void clearRemovedOrderItems(Order order, ItemsDiffResult preUpdateDiffResult) {
+        order.getOrderItems()
+             .removeIf(oi -> preUpdateDiffResult.toRemove().contains(oi.getItem().getItemId()));
+    }
+
+    private Set<Long> calculateItemIdsToRemove(Order toUpdate, Set<Long> incomingUniqueItemIds) {
+        return toUpdate.getOrderItems()
+                       .stream()
+                       .map(oi -> oi.getItem().getItemId())
+                       .filter(itemId -> !incomingUniqueItemIds.contains(itemId))
+                       .collect(Collectors.toSet());
+    }
+
+    private Set<Long> calculateItemIdsToUpdate(OrderUpdateDto updateDto, Set<Long> existingItemIds) {
+        return updateDto.items()
+                        .stream()
+                        .map(OrderItemDtoRequest::itemId)
+                        .filter(existingItemIds::contains)
+                        .collect(Collectors.toSet());
+    }
+
+    private Set<Long> calculateItemIdsToAdd(OrderUpdateDto updateDto, Set<Long> existingItemIds) {
+        return updateDto.items()
+                        .stream()
+                        .map(OrderItemDtoRequest::itemId)
+                        .filter(reqItem -> !existingItemIds.contains(reqItem))
+                        .collect(Collectors.toSet());
     }
 
     private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order) {
@@ -153,24 +251,34 @@ public class OrderServiceImpl implements OrderService {
         Map<Long, ItemSnapshot> existingItems = validateAndGetItemsByIds(createDto);
         createDto.items()
                  .forEach(orderItemDto -> {
-                     OrderItem orderItem = convertToOrderItem(orderItemDto, existingItems);
-                     order.addOrderItem(orderItem);
+                     mapToOrderItemAndAssign(order, orderItemDto, existingItems);
                  });
     }
 
+    private void mapToOrderItemAndAssign(Order order,
+                                         OrderItemDtoRequest orderItemDto,
+                                         Map<Long, ItemSnapshot> existingItems) {
+        OrderItem orderItem = convertToOrderItem(orderItemDto, existingItems);
+        order.addOrderItem(orderItem);
+    }
+
     private Map<Long, ItemSnapshot> validateAndGetItemsByIds(OrderCreateDto createDto) {
-        Set<Long> incomingItemIds = getUniqueIncomingItemIds(createDto);
-        checkIfNoDuplicatedOrderItems(createDto, incomingItemIds);
-        Set<ItemSnapshot> items = itemFacade.getByIds(incomingItemIds);
+        Set<Long> uniqueIncomingItemIds = getUniqueIncomingItemIds(createDto.items());
+        checkIfNoDuplicatedOrderItems(createDto.items(), uniqueIncomingItemIds);
+        return fetchItemSnaphotsMapByItemIds(uniqueIncomingItemIds);
+    }
+
+    private Map<Long, ItemSnapshot> fetchItemSnaphotsMapByItemIds(Set<Long> uniqueIncomingItemIds) {
+        Set<ItemSnapshot> items = itemFacade.getByIds(uniqueIncomingItemIds);
         Map<Long, ItemSnapshot> existingItems = getSnapshotsMap(items);
-        checkIfAllItemsWereFound(incomingItemIds, existingItems);
+        checkIfAllItemsWereFound(uniqueIncomingItemIds, existingItems);
         return existingItems;
     }
 
-    private Set<Long> getUniqueIncomingItemIds(OrderCreateDto createDto) {
-        return createDto.items().stream()
-                        .map(OrderItemDtoRequest::itemId)
-                        .collect(Collectors.toSet());
+    private Set<Long> getUniqueIncomingItemIds(List<OrderItemDtoRequest> incomingOrderItems) {
+        return incomingOrderItems.stream()
+                                 .map(OrderItemDtoRequest::itemId)
+                                 .collect(Collectors.toSet());
     }
 
     private void checkIfAllItemsWereFound(Set<Long> incomingItemIds, Map<Long, ItemSnapshot> existingItems) {
@@ -183,10 +291,12 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private void checkIfNoDuplicatedOrderItems(OrderCreateDto createDto, Set<Long> incomingItemIds) {
-        if (isNotUniqueOrderItems(incomingItemIds, createDto.items())) {
+    private void checkIfNoDuplicatedOrderItems(List<OrderItemDtoRequest> incomingOrderItems,
+                                               Set<Long> uniqueIncomingItemIds) {
+        if (isNotUniqueOrderItems(uniqueIncomingItemIds, incomingOrderItems)) {
             throw new NotUniqueOrderItemException(
-                    "The provided order item dto list contains duplicated order items: %s".formatted(createDto.items()),
+                    "The provided order item dto list contains duplicated order items: %s".formatted(
+                            incomingOrderItems),
                     HttpStatus.BAD_REQUEST);
         }
     }
