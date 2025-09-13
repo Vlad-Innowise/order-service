@@ -20,9 +20,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     Optional<Order> findByIdAndUserIdFetchOrderItems(@Param("id") UUID id,
                                                      @Param("userId") Long userId);
 
+    @Query("SELECT o FROM Order o WHERE o.id IN(:orderIds) AND o.userId=:userId")
+    Page<Order> findPageByIdsAndUserId(@Param("orderIds") Collection<UUID> orderIds,
+                                       @Param("userId") Long userId,
+                                       Pageable pageable);
+
     @EntityGraph(attributePaths = "orderItems")
-    @Query("SELECT o FROM Order o WHERE o.id IN(:orderIds)")
-    Page<Order> findAllByIdsInFetchOrderItems(@Param("orderIds") Collection<UUID> orderIds, Pageable pageable);
+    List<Order> findByIdIn(Collection<UUID> orderIds);
 
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.status=:status AND o.userId=:userId")
     List<Order> findAllByStatusAndUserIdFetchOrderItems(@Param("status") OrderStatus status,
