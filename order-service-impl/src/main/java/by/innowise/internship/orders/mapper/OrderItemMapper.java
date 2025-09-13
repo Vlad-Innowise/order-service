@@ -23,13 +23,12 @@ public interface OrderItemMapper {
     OrderItem toEntity(OrderItemDtoRequest dto, @Context ItemSnapshot itemSnapshot);
 
     @AfterMapping
-    default OrderItem finishEntityMapping(@MappingTarget OrderItem orderItem,
-                                          @Context ItemSnapshot itemSnapshot) {
+    default void finishEntityMapping(@MappingTarget OrderItem orderItem,
+                                     @Context ItemSnapshot itemSnapshot) {
         if (orderItem != null) {
             orderItem.setId(UUID.randomUUID());
             orderItem.setItem(itemSnapshot);
         }
-        return orderItem;
     }
 
     @Mapping(source = "item.itemId", target = "itemId")

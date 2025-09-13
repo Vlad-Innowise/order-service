@@ -26,12 +26,11 @@ public interface OrderMapper {
     Order toEntity(OrderCreateDto d, @Context Long userId);
 
     @AfterMapping
-    default Order mapAdditionalProperties(@MappingTarget Order order, @Context Long userId) {
+    default void mapAdditionalProperties(@MappingTarget Order order, @Context Long userId) {
         if (order != null) {
             order.setId(UUID.randomUUID());
             order.setUserId(userId);
         }
-        return order;
     }
 
     @Mapping(target = "user", expression = "java(user)")
