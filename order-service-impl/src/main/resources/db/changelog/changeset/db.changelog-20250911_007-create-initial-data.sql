@@ -44,10 +44,10 @@ VALUES
   (gen_random_uuid(), '00000000-0000-0000-0000-000000000003', 2, 'Iphone', 1100.00, 1, NOW(), NOW(), 0),
   (gen_random_uuid(), '00000000-0000-0000-0000-000000000003', 3, 'Ipad', 700.00, 1, NOW(), NOW(), 0);
 
--- Order 4 (user 2, FINISHED) — Ноутбук + Airpods
+-- Order 4 (user 2, FINISHED) — Macbook + Airpods
 INSERT INTO app.order_items (id, order_id, item_id, item_name, item_price, quantity, created_at, updated_at, version)
 VALUES
-  (gen_random_uuid(), '00000000-0000-0000-0000-000000000004', 1, 'Ноутбук', 2100.00, 1, NOW(), NOW(), 0),
+  (gen_random_uuid(), '00000000-0000-0000-0000-000000000004', 1, 'Macbook', 2100.00, 1, NOW(), NOW(), 0),
   (gen_random_uuid(), '00000000-0000-0000-0000-000000000004', 4, 'Airpods', 250.00, 1, NOW(), NOW(), 0);
 
 -- Order 5 (user 2, FINISHED) — Ipad + Apple charging cable
