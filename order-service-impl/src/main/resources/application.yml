@@ -39,7 +39,7 @@ logging:
 # Custom properties
 application:
   security:
-    enabled: 'false'
+    enabled: 'true'
     secretKey: "${TOKEN_SECRET}"
   feign:
     clients:
