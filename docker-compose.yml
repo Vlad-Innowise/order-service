@@ -1,0 +1,36 @@
+services:
+
+  order-service-impl:
+    build: ./order-service-impl
+    env_file:
+      - '.env.docker'
+    environment:
+      SPRING_PROFILES_ACTIVE: "${APPLICATION_PROFILE}"
+      DB_URL: "jdbc:postgresql://order-service-db:5432/${ORDER_SERVICE_DB_NAME}"
+      DB_USER: "${ORDER_SERVICE_DB_USER}"
+      DB_PASSWORD: "${ORDER_SERVICE_DB_PASSWORD}"
+      JAVA_TOOL_OPTIONS: '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5000'
+    ports:
+      - '9009:8080'
+      - '5025:5000'
+    expose:
+      - '9009' # application api
+      - '5025' # debug
+    restart: 'always'
+    depends_on:
+      - 'order-service-db'
+
+  order-service-db:
+    image: 'postgres:17-alpine'
+    environment:
+      POSTGRES_USER: "${ORDER_SERVICE_DB_USER}"
+      POSTGRES_PASSWORD: "${ORDER_SERVICE_DB_PASSWORD}"
+      POSTGRES_DB: "${ORDER_SERVICE_DB_NAME}"
+    ports:
+      - '6666:5432'
+    volumes:
+      - 'pg-order-service-vol:/var/lib/postgresql/data'
+    restart: 'always'
+
+volumes:
+  pg-order-service-vol:
