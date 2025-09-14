@@ -1,12 +1,14 @@
 package by.innowise.internship.orders.service.impl;
 
+import by.innowise.common.library.dto.UserProfileDto;
+import by.innowise.common.library.exception.UserNotFoundException;
 import by.innowise.internship.orders.exception.ItemNotFoundException;
 import by.innowise.internship.orders.exception.NotUniqueOrderItemException;
 import by.innowise.internship.orders.exception.OrderModificationDeniedException;
 import by.innowise.internship.orders.exception.OrderNotFoundException;
+import by.innowise.internship.orders.feign.UserServiceClient;
 import by.innowise.internship.orders.mapper.OrderItemMapper;
 import by.innowise.internship.orders.mapper.OrderMapper;
-import by.innowise.internship.orders.model.dto.UserProfileDto;
 import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoRequest;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoResponse;
@@ -21,6 +23,7 @@ import by.innowise.internship.orders.service.OrderService;
 import by.innowise.internship.orders.service.dto.ItemSnapshot;
 import by.innowise.internship.orders.service.dto.ItemsDiffResult;
 import by.innowise.internship.orders.service.facade.ItemFacade;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -49,6 +52,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemMapper orderItemMapper;
     private final OrderCalculator orderCalculator;
     private final ItemFacade itemFacade;
+    private final UserServiceClient userServiceClient;
 
     @Override
     public OrderResponseDto create(OrderCreateDto createDto, Long userId) {
@@ -219,8 +223,9 @@ public class OrderServiceImpl implements OrderService {
     private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order) {
         List<OrderItemDtoResponse> calculatedOrderItemResponses = getOrderItemResponses(order);
         BigDecimal orderTotal = orderCalculator.calculateOrderTotal(order);
+        UserProfileDto userProfileDto = retrieveUserProfile(order);
         return orderMapper.toDto(order,
-                                 new UserProfileDto(order.getUserId()),
+                                 userProfileDto,
                                  calculatedOrderItemResponses,
                                  orderTotal);
     }
@@ -233,6 +238,16 @@ public class OrderServiceImpl implements OrderService {
                                         HttpStatus.BAD_REQUEST));
         log.info("Found order: {}", order);
         return order;
+    }
+
+    private UserProfileDto retrieveUserProfile(Order order) {
+        try {
+            return userServiceClient.getUserById(order.getUserId());
+        } catch (FeignException.NotFound e) {
+            throw new UserNotFoundException(
+                    "Cannot retrieve the user: {%s} from user-service".formatted(order.getUserId()),
+                    HttpStatus.NOT_FOUND, e);
+        }
     }
 
     private List<OrderItemDtoResponse> getOrderItemResponses(Order order) {

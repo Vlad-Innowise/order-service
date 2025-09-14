@@ -1,6 +1,6 @@
 package by.innowise.internship.orders.model.dto.order;
 
-import by.innowise.internship.orders.model.dto.UserProfileDto;
+import by.innowise.common.library.dto.UserProfileDto;
 import by.innowise.internship.orders.model.entity.OrderStatus;
 
 import java.math.BigDecimal;

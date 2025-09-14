@@ -1,6 +1,6 @@
 package by.innowise.internship.orders.mapper;
 
-import by.innowise.internship.orders.model.dto.UserProfileDto;
+import by.innowise.common.library.dto.UserProfileDto;
 import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoResponse;
 import by.innowise.internship.orders.model.dto.order.OrderResponseDto;
