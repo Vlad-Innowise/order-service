@@ -41,3 +41,7 @@ application:
   security:
     enabled: 'false'
     secretKey: "${TOKEN_SECRET}"
+  feign:
+    clients:
+      user-service:
+        url: 'http://localhost:8080'
