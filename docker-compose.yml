@@ -14,13 +14,13 @@ services:
       ORDER_SERVICE_GH_REPO_NAME: "${ORDER_SERVICE_GH_REPO_NAME}"
       ORDER_SERVICE_IMAGE_NAME: "${ORDER_SERVICE_IMAGE_NAME}"
       TOKEN_SECRET: "${TOKEN_SECRET}"
-      JAVA_TOOL_OPTIONS: '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5000'
+      JAVA_TOOL_OPTIONS: '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007'
     ports:
       - '9009:8080'
-      - '5025:5000'
+      - '5007:5007'
     expose:
       - '9009' # application api
-      - '5025' # debug
+      - '5007' # debug
     restart: 'always'
     depends_on:
       - 'order-service-db'
