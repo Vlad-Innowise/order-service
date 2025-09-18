@@ -44,4 +44,4 @@ application:
   feign:
     clients:
       user-service:
-        url: 'http://localhost:8080'
+        url: "${USER_SERVICE_URL}"
