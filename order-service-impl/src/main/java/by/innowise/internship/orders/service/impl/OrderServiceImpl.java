@@ -56,6 +56,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderResponseDto create(OrderCreateDto createDto, Long userId) {
+        UserProfileDto userProfileDto = retrieveUserProfile(userId);
         log.info("Creating order: {} for userId: {}", createDto, userId);
         Order toSave = orderMapper.toEntity(createDto, userId);
         log.info("Mapped to order entity: {}", toSave);
@@ -65,19 +66,21 @@ public class OrderServiceImpl implements OrderService {
         toSave.setStatus(OrderStatus.PENDING);
         repository.saveAndFlush(toSave);
         log.info("Order: {} pre-saved with status: {}", toSave.getId(), toSave.getStatus());
-        return calculateTotalsAndGetOrderResponse(toSave);
+        return calculateTotalsAndGetOrderResponse(toSave, userProfileDto);
     }
 
     @Transactional(readOnly = true)
     @Override
     public OrderResponseDto getById(UUID id, Long userId) {
+        UserProfileDto userProfileDto = retrieveUserProfile(userId);
         Order found = getOrderByIdAndUserId(id, userId);
-        return calculateTotalsAndGetOrderResponse(found);
+        return calculateTotalsAndGetOrderResponse(found, userProfileDto);
     }
 
     @Transactional(readOnly = true)
     @Override
     public List<OrderResponseDto> getAllByIds(List<UUID> orderIds, Long userId, Pageable pageable) {
+        UserProfileDto userProfileDto = retrieveUserProfile(userId);
         Set<UUID> idsToFind = new HashSet<>(orderIds);
         log.info("Invoking order repository for ids: [{}]", idsToFind);
         Page<Order> ordersPage = repository.findPageByIdsAndUserId(orderIds, userId, pageable);
@@ -97,12 +100,13 @@ public class OrderServiceImpl implements OrderService {
                  ordersPage.getNumber() + 1, ordersPage.getTotalPages());
         return ordersPage.getContent()
                          .stream()
-                         .map(this::calculateTotalsAndGetOrderResponse)
+                         .map(order -> calculateTotalsAndGetOrderResponse(order, userProfileDto))
                          .toList();
     }
 
     @Override
     public List<OrderResponseDto> getAllByStatus(Long userId, OrderStatus status) {
+        UserProfileDto userProfileDto = retrieveUserProfile(userId);
         log.info("Getting orders with status: {} for user id: [{}]", status.name(), userId);
         List<Order> foundOrders = repository.findAllByStatusAndUserIdFetchOrderItems(status, userId);
         Set<UUID> retrievedOrdersId = foundOrders.stream()
@@ -110,7 +114,7 @@ public class OrderServiceImpl implements OrderService {
                                                  .collect(Collectors.toSet());
         log.info("Retrieved orders: {} for userId: {}", retrievedOrdersId, userId);
         return foundOrders.stream()
-                          .map(this::calculateTotalsAndGetOrderResponse)
+                          .map(order -> calculateTotalsAndGetOrderResponse(order, userProfileDto))
                           .toList();
     }
 
@@ -118,6 +122,8 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponseDto update(OrderUpdateDto updateDto, Long userId) {
         log.info("Updating order: {} for userId: {}", updateDto.id(), userId);
+
+        UserProfileDto userProfileDto = retrieveUserProfile(userId);
 
         Order orderToUpdate = getOrderByIdAndUserId(updateDto.id(), userId);
         checkIfModificationAllowed(orderToUpdate);
@@ -133,7 +139,7 @@ public class OrderServiceImpl implements OrderService {
 
         repository.saveAndFlush(updatedOrder);
         log.info("Updated order: {} pre-saved in DB", updatedOrder);
-        return calculateTotalsAndGetOrderResponse(updatedOrder);
+        return calculateTotalsAndGetOrderResponse(updatedOrder, userProfileDto);
     }
 
     @Transactional
@@ -220,10 +226,9 @@ public class OrderServiceImpl implements OrderService {
                         .collect(Collectors.toSet());
     }
 
-    private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order) {
+    private OrderResponseDto calculateTotalsAndGetOrderResponse(Order order, UserProfileDto userProfileDto) {
         List<OrderItemDtoResponse> calculatedOrderItemResponses = getOrderItemResponses(order);
         BigDecimal orderTotal = orderCalculator.calculateOrderTotal(order);
-        UserProfileDto userProfileDto = retrieveUserProfile(order);
         return orderMapper.toDto(order,
                                  userProfileDto,
                                  calculatedOrderItemResponses,
@@ -240,12 +245,12 @@ public class OrderServiceImpl implements OrderService {
         return order;
     }
 
-    private UserProfileDto retrieveUserProfile(Order order) {
+    private UserProfileDto retrieveUserProfile(Long userId) {
         try {
-            return userServiceClient.getUserById(order.getUserId());
+            return userServiceClient.getUserById(userId);
         } catch (FeignException.NotFound e) {
             throw new UserNotFoundException(
-                    "Cannot retrieve the user: {%s} from user-service".formatted(order.getUserId()),
+                    "Cannot retrieve the user: {%s} from user-service".formatted(userId),
                     HttpStatus.NOT_FOUND, e);
         }
     }
