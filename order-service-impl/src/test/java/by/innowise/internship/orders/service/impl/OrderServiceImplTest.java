@@ -365,6 +365,67 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void getAllOrdersByStatus() {
+
+        //Order 1
+        LocalDateTime firstOrderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+        Order firstOrder = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                              USER_ID,
+                                                              OrderStatus.FINISHED,
+                                                              firstOrderCreationDate);
+        firstOrder.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+        firstOrder.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2));
+
+        List<OrderItemDtoResponse> firstOrderItemResponses =
+                firstOrder.getOrderItems()
+                          .stream()
+                          .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
+                          .toList();
+
+        OrderResponseDto firstOrderResponse = TestUtil.mapToOrderResponseDto(firstOrder,
+                                                                             userProfile,
+                                                                             firstOrderItemResponses,
+                                                                             BigDecimal.TEN);
+
+        //Order 2
+        LocalDateTime secondOrderCreationDate = firstOrderCreationDate.plusDays(2);
+        Order secondOrder = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
+                                                               USER_ID,
+                                                               OrderStatus.FINISHED,
+                                                               secondOrderCreationDate);
+        secondOrder.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1));
+
+        List<OrderItemDtoResponse> secondOrderItemResponses =
+                secondOrder.getOrderItems()
+                           .stream()
+                           .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
+                           .toList();
+
+        OrderResponseDto secondOrderResponse = TestUtil.mapToOrderResponseDto(firstOrder,
+                                                                              userProfile,
+                                                                              secondOrderItemResponses,
+                                                                              BigDecimal.TEN);
+
+        List<OrderResponseDto> expectedResult = List.of(firstOrderResponse, secondOrderResponse);
+
+        mockUserProfileRetrieval();
+        doReturn(List.of(firstOrder, secondOrder))
+                .when(repository).findAllByStatusAndUserIdFetchOrderItems(any(OrderStatus.class), anyLong());
+        mockOrderItemMapperToResponseWithDummySubtotals();
+        mockOrderCalculatorWithDummyValuesForMultipleOrders(firstOrder, secondOrder);
+        doReturn(firstOrderResponse)
+                .when(mapper).toDto(eq(firstOrder), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+        doReturn(secondOrderResponse)
+                .when(mapper).toDto(eq(secondOrder), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+
+        List<OrderResponseDto> actualResult = orderService.getAllByStatus(USER_ID, OrderStatus.FINISHED);
+
+        assertAll(
+                () -> assertThat(actualResult).containsExactlyInAnyOrderElementsOf(expectedResult)
+        );
+    }
+
+    @Test
     void deleteHappyPass() {
         LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
         Order order = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
