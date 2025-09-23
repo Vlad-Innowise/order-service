@@ -104,10 +104,10 @@ class OrderServiceImplTest {
                         TestUtil.getOrderItemDtoRequest(airpods.getItemId(), airpodsQuantity))
         );
 
-        Order order = TestUtil.getOrder(ORDER_1_ID,
-                                        USER_ID,
-                                        OrderStatus.PENDING,
-                                        orderCreateDto.creationDate());
+        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                         USER_ID,
+                                                         OrderStatus.PENDING,
+                                                         orderCreateDto.creationDate());
 
         // for orderItemMapper.toEntity() and OrderItemResponse map
         Map<Long, OrderItem> addedOrderItems = Map.of(

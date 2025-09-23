@@ -19,7 +19,7 @@ import java.util.UUID;
 @UtilityClass
 public class TestUtil {
 
-    public Order getOrder(UUID id, Long userId, OrderStatus status, LocalDateTime orderDate) {
+    public Order getOrderWithoutOrderItems(UUID id, Long userId, OrderStatus status, LocalDateTime orderDate) {
         LocalDateTime created = LocalDateTime.now();
         return Order.builder()
                     .id(id)
