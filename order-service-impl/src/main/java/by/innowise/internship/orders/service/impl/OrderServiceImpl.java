@@ -89,12 +89,12 @@ public class OrderServiceImpl implements OrderService {
                                                 .map(Order::getId)
                                                 .collect(Collectors.toSet());
 
-        //fetching order items only -> can ignore a result list
         List<UUID> missingOrderIds = idsToFind.stream()
                                               .filter(initId -> !retrievedOrdersId.contains(initId))
                                               .toList();
 
         log.warn("{} order ids were not found", missingOrderIds);
+        //fetching order items only -> can ignore a result list
         repository.findByIdIn(retrievedOrdersId);
         log.info("Retrieved orders: {} for userId: {}, page {} out of {}", ordersPage.getContent().size(), userId,
                  ordersPage.getNumber() + 1, ordersPage.getTotalPages());
