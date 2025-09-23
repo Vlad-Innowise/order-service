@@ -1,6 +1,9 @@
 package by.innowise.internship.orders.service.impl;
 
 import by.innowise.common.library.dto.UserProfileDto;
+import by.innowise.common.library.exception.UserNotFoundException;
+import by.innowise.internship.orders.exception.ItemNotFoundException;
+import by.innowise.internship.orders.exception.NotUniqueOrderItemException;
 import by.innowise.internship.orders.feign.UserServiceClient;
 import by.innowise.internship.orders.mapper.OrderItemMapper;
 import by.innowise.internship.orders.mapper.OrderMapper;
@@ -8,6 +11,7 @@ import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoRequest;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoResponse;
 import by.innowise.internship.orders.model.dto.order.OrderResponseDto;
+import by.innowise.internship.orders.model.dto.order.OrderUpdateDto;
 import by.innowise.internship.orders.model.entity.Order;
 import by.innowise.internship.orders.model.entity.OrderItem;
 import by.innowise.internship.orders.model.entity.OrderStatus;
@@ -16,16 +20,19 @@ import by.innowise.internship.orders.service.OrderCalculator;
 import by.innowise.internship.orders.service.dto.ItemSnapshot;
 import by.innowise.internship.orders.service.facade.ItemFacade;
 import by.innowise.internship.orders.service.util.TestUtil;
+import feign.FeignException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -34,12 +41,15 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -190,5 +200,84 @@ class OrderServiceImplTest {
 
     }
 
+    @Test
+    void createOrderShouldThrowExceptionInCaseDuplicatedOrderItemRequestIds() {
+
+        OrderCreateDto orderCreateDto = new OrderCreateDto(
+                LocalDateTime.now(),
+                List.of(
+                        TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 1),
+                        TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 1))
+        );
+
+        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                         USER_ID,
+                                                         OrderStatus.PENDING,
+                                                         orderCreateDto.creationDate());
+
+        doReturn(order)
+                .when(mapper).toEntity(orderCreateDto, USER_ID);
+
+        assertThrowsExactly(NotUniqueOrderItemException.class, () -> orderService.create(orderCreateDto, USER_ID));
+        verify(mapper).toEntity(any(), any());
+    }
+
+    @Test
+    void createShouldThrowWhenAnyItemFromRequestNotFound() {
+
+        long missingItemId = 999L;
+        OrderCreateDto orderCreateDto = new OrderCreateDto(
+                LocalDateTime.now(),
+                List.of(
+                        TestUtil.getOrderItemDtoRequest(iphone.getItemId(), 1),
+                        TestUtil.getOrderItemDtoRequest(missingItemId, 3))
+        );
+
+        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                         USER_ID,
+                                                         OrderStatus.PENDING,
+                                                         orderCreateDto.creationDate());
+
+        doReturn(order)
+                .when(mapper).toEntity(orderCreateDto, USER_ID);
+
+        doReturn(Set.of(iphone))
+                .when(itemFacade).getByIds(anyCollection());
+
+        assertThrowsExactly(ItemNotFoundException.class, () -> orderService.create(orderCreateDto, USER_ID));
+        verify(mapper).toEntity(any(), any());
+        verify(itemFacade).getByIds(anyCollection());
+    }
+
+    @Test
+    void allMethodsShouldThrowUserNotFoundWhenUserMissing() {
+
+        OrderCreateDto createDto = new OrderCreateDto(LocalDateTime.now(), List.of());
+
+        UUID someOrderId = UUID.randomUUID();
+        OrderUpdateDto updateDto = new OrderUpdateDto(someOrderId,
+                                                      LocalDateTime.now(),
+                                                      Collections.emptyList(),
+                                                      OrderStatus.PENDING);
+
+        Pageable pageable = Pageable.unpaged();
+
+        doThrow(FeignException.NotFound.class)
+                .when(userServiceClient).getUserById(MISSING_USER_ID);
+
+        assertAll(
+                () -> assertThrowsExactly(UserNotFoundException.class,
+                                          () -> orderService.create(createDto, MISSING_USER_ID)),
+                () -> assertThrowsExactly(UserNotFoundException.class,
+                                          () -> orderService.getById(someOrderId, MISSING_USER_ID)),
+                () -> assertThrowsExactly(UserNotFoundException.class,
+                                          () -> orderService.getAllByIds(List.of(someOrderId), MISSING_USER_ID,
+                                                                         pageable)),
+                () -> assertThrowsExactly(UserNotFoundException.class,
+                                          () -> orderService.getAllByStatus(MISSING_USER_ID, OrderStatus.PENDING)),
+                () -> assertThrowsExactly(UserNotFoundException.class,
+                                          () -> orderService.update(updateDto, MISSING_USER_ID))
+        );
+    }
 
 }
