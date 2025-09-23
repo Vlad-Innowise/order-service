@@ -29,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
@@ -51,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -66,7 +69,7 @@ class OrderServiceImplTest {
     private static final Long MISSING_USER_ID = 999L;
     private static final UUID ORDER_1_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID ORDER_2_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final UUID ORDER_3_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID MISSING_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
     private ItemSnapshot macbook;
     private ItemSnapshot iphone;
@@ -294,6 +297,71 @@ class OrderServiceImplTest {
 
         assertThrowsExactly(OrderNotFoundException.class, () -> orderService.getById(ORDER_2_ID, USER_ID));
         verify(userServiceClient).getUserById(anyLong());
+    }
+
+    @Test
+    void getOrdersByIdsFoundAllOrPartially() {
+
+        //Order 1
+        LocalDateTime firstOrderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+        Order firstOrder = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                              USER_ID,
+                                                              OrderStatus.FINISHED,
+                                                              firstOrderCreationDate);
+        firstOrder.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+        firstOrder.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2));
+
+        List<OrderItemDtoResponse> firstOrderItemResponses =
+                firstOrder.getOrderItems()
+                          .stream()
+                          .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
+                          .toList();
+
+        OrderResponseDto firstOrderResponse = TestUtil.mapToOrderResponseDto(firstOrder,
+                                                                             userProfile,
+                                                                             firstOrderItemResponses,
+                                                                             BigDecimal.TEN);
+
+        //Order 2
+        LocalDateTime secondOrderCreationDate = firstOrderCreationDate.plusDays(2);
+        Order secondOrder = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
+                                                               USER_ID,
+                                                               OrderStatus.FINISHED,
+                                                               secondOrderCreationDate);
+        secondOrder.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1));
+
+        List<OrderItemDtoResponse> secondOrderItemResponses =
+                secondOrder.getOrderItems()
+                           .stream()
+                           .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
+                           .toList();
+
+        OrderResponseDto secondOrderResponse = TestUtil.mapToOrderResponseDto(firstOrder,
+                                                                              userProfile,
+                                                                              secondOrderItemResponses,
+                                                                              BigDecimal.TEN);
+
+        Pageable pageable = Pageable.unpaged();
+        List<UUID> orderIdsToFind = List.of(ORDER_1_ID, ORDER_2_ID, MISSING_ORDER_ID);
+        List<OrderResponseDto> expectedResult = List.of(firstOrderResponse, secondOrderResponse);
+
+        mockUserProfileRetrieval();
+        doReturn(new PageImpl<>(List.of(firstOrder, secondOrder)))
+                .when(repository).findPageByIdsAndUserId(anyList(), anyLong(), any(Pageable.class));
+        doReturn(List.of(firstOrder, secondOrder))
+                .when(repository).findByIdIn(anySet());
+        mockOrderItemMapperToResponseWithDummySubtotals();
+        mockOrderCalculatorWithDummyValuesForMultipleOrders(firstOrder, secondOrder);
+        doReturn(firstOrderResponse)
+                .when(mapper).toDto(eq(firstOrder), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+        doReturn(secondOrderResponse)
+                .when(mapper).toDto(eq(secondOrder), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+
+        List<OrderResponseDto> actualResult = orderService.getAllByIds(orderIdsToFind, USER_ID, pageable);
+
+        assertAll(
+                () -> assertThat(actualResult).containsExactlyInAnyOrderElementsOf(expectedResult)
+        );
     }
 
     @Test
