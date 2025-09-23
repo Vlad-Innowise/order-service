@@ -24,6 +24,8 @@ import by.innowise.internship.orders.service.facade.ItemFacade;
 import by.innowise.internship.orders.service.util.TestUtil;
 import feign.FeignException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -110,115 +112,7 @@ class OrderServiceImplTest {
                                               "testorson@email.com");
     }
 
-    @Test
-    void createOrderHappyPass() {
-        OrderCreateDto orderCreateDto = new OrderCreateDto(
-                LocalDateTime.now(),
-                List.of(
-                        TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1),
-                        TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 2))
-        );
-
-        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
-                                                         USER_ID,
-                                                         OrderStatus.PENDING,
-                                                         orderCreateDto.creationDate());
-        Map<Long, Integer> expectedItems =
-                orderCreateDto.items()
-                              .stream()
-                              .collect(Collectors.toMap(OrderItemDtoRequest::itemId,
-                                                        OrderItemDtoRequest::quantity));
-
-        mockUserProfileRetrieval();
-        doReturn(order)
-                .when(mapper).toEntity(any(OrderCreateDto.class), anyLong());
-        doReturn(Set.of(macbook, airpods))
-                .when(itemFacade).getByIds(anyCollection());
-        mockOrderItemMapperToEntity();
-        doReturn(order)
-                .when(repository).saveAndFlush(any(Order.class));
-        mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
-        mockOrderItemMapperToResponseWithDummySubtotals();
-        mockOrderMapperToResponseWhenCreatedOrModified();
-
-        OrderResponseDto actualResult = orderService.create(orderCreateDto, USER_ID);
-
-        assertAll(
-                () -> assertThat(actualResult.id()).isEqualTo(order.getId()),
-                () -> assertThat(actualResult.status()).isEqualTo(order.getStatus()),
-                () -> assertThat(actualResult.user()).isEqualTo(userProfile),
-                () -> assertThat(actualResult.orderItems())
-                        .hasSize(orderCreateDto.items().size())
-                        .allSatisfy(oi -> {
-                            assertThat(actualResult.orderItems())
-                                    .extracting(OrderItemDtoResponse::itemId)
-                                    .containsExactlyInAnyOrderElementsOf(expectedItems.keySet());
-                            assertThat(oi.quantity()).isEqualTo(expectedItems.get(oi.itemId()));
-                        }),
-                () -> assertThat(actualResult.total()).isEqualTo(BigDecimal.TEN)
-        );
-
-        verify(userServiceClient).getUserById(anyLong());
-        verify(mapper).toEntity(any(), any());
-        verify(itemFacade).getByIds(anyCollection());
-        verify(orderItemMapper, times(orderCreateDto.items().size())).toEntity(any(), any());
-        verify(repository).saveAndFlush(any());
-        verify(orderCalculator).calculateSubtotals(any());
-        verify(orderCalculator).calculateOrderTotal(any());
-        verify(orderItemMapper, times(orderCreateDto.items().size())).toResponseDto(any(), any());
-        verify(mapper).toDto(any(), any(), anyList(), any());
-
-    }
-
-    @Test
-    void createOrderShouldThrowExceptionInCaseDuplicatedOrderItemRequestIds() {
-        OrderCreateDto orderCreateDto = new OrderCreateDto(
-                LocalDateTime.now(),
-                List.of(
-                        TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 1),
-                        TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 1))
-        );
-
-        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
-                                                         USER_ID,
-                                                         OrderStatus.PENDING,
-                                                         orderCreateDto.creationDate());
-
-        doReturn(order)
-                .when(mapper).toEntity(orderCreateDto, USER_ID);
-
-        assertThrowsExactly(NotUniqueOrderItemException.class, () -> orderService.create(orderCreateDto, USER_ID));
-        verify(userServiceClient).getUserById(anyLong());
-        verify(mapper).toEntity(any(), any());
-    }
-
-    @Test
-    void createShouldThrowWhenAnyItemFromRequestNotFound() {
-        long missingItemId = 999L;
-        OrderCreateDto orderCreateDto = new OrderCreateDto(
-                LocalDateTime.now(),
-                List.of(
-                        TestUtil.getOrderItemDtoRequest(iphone.getItemId(), 1),
-                        TestUtil.getOrderItemDtoRequest(missingItemId, 3))
-        );
-
-        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
-                                                         USER_ID,
-                                                         OrderStatus.PENDING,
-                                                         orderCreateDto.creationDate());
-
-        mockUserProfileRetrieval();
-        doReturn(order)
-                .when(mapper).toEntity(orderCreateDto, USER_ID);
-        doReturn(Set.of(iphone))
-                .when(itemFacade).getByIds(anyCollection());
-
-        assertThrowsExactly(ItemNotFoundException.class, () -> orderService.create(orderCreateDto, USER_ID));
-        verify(userServiceClient).getUserById(anyLong());
-        verify(mapper).toEntity(any(), any());
-        verify(itemFacade).getByIds(anyCollection());
-    }
-
+    @DisplayName("Checking user profile retrieval by id from User Service for all methods")
     @Test
     void allMethodsShouldThrowUserNotFoundWhenUserMissing() {
         OrderCreateDto createDto = new OrderCreateDto(LocalDateTime.now(), List.of());
@@ -248,57 +142,7 @@ class OrderServiceImplTest {
         );
     }
 
-    @Test
-    void getOrderByIdHappyPass() {
-        LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
-        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
-                                                         USER_ID,
-                                                         OrderStatus.FINISHED,
-                                                         orderCreationDate);
-        order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
-        order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1));
-        order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2));
-        List<OrderItemDtoResponse> orderItemResponses =
-                order.getOrderItems()
-                     .stream()
-                     .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
-                     .toList();
-
-        OrderResponseDto expectedResult = TestUtil.mapToOrderResponseDto(order,
-                                                                         userProfile,
-                                                                         orderItemResponses,
-                                                                         BigDecimal.TEN);
-
-        mockUserProfileRetrieval();
-        doReturn(Optional.of(order))
-                .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-        mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
-        mockOrderItemMapperToResponseWithDummySubtotals();
-        doReturn(expectedResult)
-                .when(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
-
-        OrderResponseDto actualResult = orderService.getById(ORDER_2_ID, USER_ID);
-
-        assertThat(actualResult).isEqualTo(expectedResult);
-        verify(userServiceClient).getUserById(anyLong());
-        verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-        verify(orderCalculator).calculateSubtotals(any(Order.class));
-        verify(orderCalculator).calculateOrderTotal(any(Order.class));
-        verify(orderItemMapper, times(order.getOrderItems().size())).toResponseDto(any(OrderItem.class),
-                                                                                   any(BigDecimal.class));
-        verify(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
-    }
-
-    @Test
-    void getOrderByShouldThrowOrderNotFound() {
-        mockUserProfileRetrieval();
-        doReturn(Optional.empty())
-                .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-
-        assertThrowsExactly(OrderNotFoundException.class, () -> orderService.getById(ORDER_2_ID, USER_ID));
-        verify(userServiceClient).getUserById(anyLong());
-    }
-
+    @DisplayName("testing get all orders by order ids")
     @Test
     void getOrdersByIdsFoundAllOrPartially() {
 
@@ -364,6 +208,7 @@ class OrderServiceImplTest {
         );
     }
 
+    @DisplayName("testing get all orders by order status")
     @Test
     void getAllOrdersByStatus() {
 
@@ -425,52 +270,6 @@ class OrderServiceImplTest {
         );
     }
 
-    @Test
-    void deleteHappyPass() {
-        LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
-        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
-                                                         USER_ID,
-                                                         OrderStatus.PENDING,
-                                                         orderCreationDate);
-        Stream.of(
-                TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1),
-                TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1),
-                TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2)
-        ).forEach(order::addOrderItem);
-
-        doReturn(Optional.of(order))
-                .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-
-        doNothing()
-                .when(repository).delete(any(Order.class));
-
-        orderService.delete(ORDER_2_ID, USER_ID);
-
-        verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-        verify(repository).delete(any(Order.class));
-    }
-
-    @Test
-    void deleteShouldThrowOrderModificationExceptionForOrderInFinishedStatus() {
-        LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
-        Order order = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
-                                                         USER_ID,
-                                                         OrderStatus.FINISHED,
-                                                         orderCreationDate);
-        Stream.of(
-                TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1),
-                TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1),
-                TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2)
-        ).forEach(order::addOrderItem);
-
-        doReturn(Optional.of(order))
-                .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-
-        assertThrowsExactly(OrderModificationDeniedException.class, () -> orderService.delete(ORDER_2_ID, USER_ID));
-
-        verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-    }
-
     private void mockUserProfileRetrieval() {
         doReturn(userProfile)
                 .when(userServiceClient).getUserById(USER_ID);
@@ -526,5 +325,227 @@ class OrderServiceImplTest {
                                         totalArg,
                                         userProfileArg);
         }).when(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+    }
+
+    @DisplayName("testing order creation")
+    @Nested
+    class create {
+
+        @Test
+        void createOrderHappyPass() {
+            OrderCreateDto orderCreateDto = new OrderCreateDto(
+                    LocalDateTime.now(),
+                    List.of(
+                            TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1),
+                            TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 2))
+            );
+
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreateDto.creationDate());
+            Map<Long, Integer> expectedItems =
+                    orderCreateDto.items()
+                                  .stream()
+                                  .collect(Collectors.toMap(OrderItemDtoRequest::itemId,
+                                                            OrderItemDtoRequest::quantity));
+
+            mockUserProfileRetrieval();
+            doReturn(order)
+                    .when(mapper).toEntity(any(OrderCreateDto.class), anyLong());
+            doReturn(Set.of(macbook, airpods))
+                    .when(itemFacade).getByIds(anyCollection());
+            mockOrderItemMapperToEntity();
+            doReturn(order)
+                    .when(repository).saveAndFlush(any(Order.class));
+            mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
+            mockOrderItemMapperToResponseWithDummySubtotals();
+            mockOrderMapperToResponseWhenCreatedOrModified();
+
+            OrderResponseDto actualResult = orderService.create(orderCreateDto, USER_ID);
+
+            assertAll(
+                    () -> assertThat(actualResult.id()).isEqualTo(order.getId()),
+                    () -> assertThat(actualResult.status()).isEqualTo(order.getStatus()),
+                    () -> assertThat(actualResult.user()).isEqualTo(userProfile),
+                    () -> assertThat(actualResult.orderItems())
+                            .hasSize(orderCreateDto.items().size())
+                            .allSatisfy(oi -> {
+                                assertThat(actualResult.orderItems())
+                                        .extracting(OrderItemDtoResponse::itemId)
+                                        .containsExactlyInAnyOrderElementsOf(expectedItems.keySet());
+                                assertThat(oi.quantity()).isEqualTo(expectedItems.get(oi.itemId()));
+                            }),
+                    () -> assertThat(actualResult.total()).isEqualTo(BigDecimal.TEN)
+            );
+
+            verify(userServiceClient).getUserById(anyLong());
+            verify(mapper).toEntity(any(), any());
+            verify(itemFacade).getByIds(anyCollection());
+            verify(orderItemMapper, times(orderCreateDto.items().size())).toEntity(any(), any());
+            verify(repository).saveAndFlush(any());
+            verify(orderCalculator).calculateSubtotals(any());
+            verify(orderCalculator).calculateOrderTotal(any());
+            verify(orderItemMapper, times(orderCreateDto.items().size())).toResponseDto(any(), any());
+            verify(mapper).toDto(any(), any(), anyList(), any());
+
+        }
+
+        @Test
+        void createOrderShouldThrowExceptionInCaseDuplicatedOrderItemRequestIds() {
+            OrderCreateDto orderCreateDto = new OrderCreateDto(
+                    LocalDateTime.now(),
+                    List.of(
+                            TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 1),
+                            TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 1))
+            );
+
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreateDto.creationDate());
+
+            doReturn(order)
+                    .when(mapper).toEntity(orderCreateDto, USER_ID);
+
+            assertThrowsExactly(NotUniqueOrderItemException.class, () -> orderService.create(orderCreateDto, USER_ID));
+            verify(userServiceClient).getUserById(anyLong());
+            verify(mapper).toEntity(any(), any());
+        }
+
+        @Test
+        void createShouldThrowWhenAnyItemFromRequestNotFound() {
+            long missingItemId = 999L;
+            OrderCreateDto orderCreateDto = new OrderCreateDto(
+                    LocalDateTime.now(),
+                    List.of(
+                            TestUtil.getOrderItemDtoRequest(iphone.getItemId(), 1),
+                            TestUtil.getOrderItemDtoRequest(missingItemId, 3))
+            );
+
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreateDto.creationDate());
+
+            mockUserProfileRetrieval();
+            doReturn(order)
+                    .when(mapper).toEntity(orderCreateDto, USER_ID);
+            doReturn(Set.of(iphone))
+                    .when(itemFacade).getByIds(anyCollection());
+
+            assertThrowsExactly(ItemNotFoundException.class, () -> orderService.create(orderCreateDto, USER_ID));
+            verify(userServiceClient).getUserById(anyLong());
+            verify(mapper).toEntity(any(), any());
+            verify(itemFacade).getByIds(anyCollection());
+        }
+    }
+
+    @DisplayName("testing getting order by id")
+    @Nested
+    class getById {
+
+        @Test
+        void getOrderByIdHappyPass() {
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
+                                                             USER_ID,
+                                                             OrderStatus.FINISHED,
+                                                             orderCreationDate);
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1));
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2));
+            List<OrderItemDtoResponse> orderItemResponses =
+                    order.getOrderItems()
+                         .stream()
+                         .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
+                         .toList();
+
+            OrderResponseDto expectedResult = TestUtil.mapToOrderResponseDto(order,
+                                                                             userProfile,
+                                                                             orderItemResponses,
+                                                                             BigDecimal.TEN);
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
+            mockOrderItemMapperToResponseWithDummySubtotals();
+            doReturn(expectedResult)
+                    .when(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+
+            OrderResponseDto actualResult = orderService.getById(ORDER_2_ID, USER_ID);
+
+            assertThat(actualResult).isEqualTo(expectedResult);
+            verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            verify(orderCalculator).calculateSubtotals(any(Order.class));
+            verify(orderCalculator).calculateOrderTotal(any(Order.class));
+            verify(orderItemMapper, times(order.getOrderItems().size())).toResponseDto(any(OrderItem.class),
+                                                                                       any(BigDecimal.class));
+            verify(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+        }
+
+        @Test
+        void getOrderByShouldThrowOrderNotFound() {
+            mockUserProfileRetrieval();
+            doReturn(Optional.empty())
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+
+            assertThrowsExactly(OrderNotFoundException.class, () -> orderService.getById(ORDER_2_ID, USER_ID));
+            verify(userServiceClient).getUserById(anyLong());
+        }
+    }
+
+    @DisplayName("testing order deletion")
+    @Nested
+    class delete {
+
+        @Test
+        void deleteHappyPass() {
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreationDate);
+            Stream.of(
+                    TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1),
+                    TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1),
+                    TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2)
+            ).forEach(order::addOrderItem);
+
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+
+            doNothing()
+                    .when(repository).delete(any(Order.class));
+
+            orderService.delete(ORDER_2_ID, USER_ID);
+
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            verify(repository).delete(any(Order.class));
+        }
+
+        @Test
+        void deleteShouldThrowOrderModificationExceptionForOrderInFinishedStatus() {
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_2_ID,
+                                                             USER_ID,
+                                                             OrderStatus.FINISHED,
+                                                             orderCreationDate);
+            Stream.of(
+                    TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1),
+                    TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1),
+                    TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2)
+            ).forEach(order::addOrderItem);
+
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+
+            assertThrowsExactly(OrderModificationDeniedException.class, () -> orderService.delete(ORDER_2_ID, USER_ID));
+
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+        }
+
     }
 }
