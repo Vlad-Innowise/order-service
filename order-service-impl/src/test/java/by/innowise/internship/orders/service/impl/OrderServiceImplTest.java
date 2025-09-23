@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 
@@ -36,13 +35,14 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -109,87 +109,52 @@ class OrderServiceImplTest {
 
     @Test
     void createOrderHappyPass() {
-
-        int macbookQuantity = 1;
-        int airpodsQuantity = 2;
-
         OrderCreateDto orderCreateDto = new OrderCreateDto(
                 LocalDateTime.now(),
                 List.of(
-                        TestUtil.getOrderItemDtoRequest(macbook.getItemId(), macbookQuantity),
-                        TestUtil.getOrderItemDtoRequest(airpods.getItemId(), airpodsQuantity))
+                        TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1),
+                        TestUtil.getOrderItemDtoRequest(airpods.getItemId(), 2))
         );
 
         Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
                                                          USER_ID,
                                                          OrderStatus.PENDING,
                                                          orderCreateDto.creationDate());
+        Map<Long, Integer> expectedItems =
+                orderCreateDto.items()
+                              .stream()
+                              .collect(Collectors.toMap(OrderItemDtoRequest::itemId,
+                                                        OrderItemDtoRequest::quantity));
 
-        // for orderItemMapper.toEntity() and OrderItemResponse map
-        Map<Long, OrderItem> addedOrderItems = Map.of(
-                macbook.getItemId(), TestUtil.getOrderItem(UUID.randomUUID(), macbook, macbookQuantity),
-                airpods.getItemId(), TestUtil.getOrderItem(UUID.randomUUID(), airpods, airpodsQuantity)
-        );
-
-        BigDecimal macbookExpectedSubtotal =
-                TestUtil.calculateOrderItemSubtotal(macbook.getItemPrice(), macbookQuantity);
-        BigDecimal airpodsExpectedSubtotal =
-                TestUtil.calculateOrderItemSubtotal(macbook.getItemPrice(), airpodsQuantity);
-
-        BigDecimal orderExpectedTotal = macbookExpectedSubtotal.add(airpodsExpectedSubtotal);
-
-        // for orderItemMapper.toDto() and expectedResult
-        Map<Long, OrderItemDtoResponse> orderItemResponseByItemIds = Map.of(
-                macbook.getItemId(),
-                TestUtil.mapToOrderItemResponse(addedOrderItems.get(macbook.getItemId()), macbookExpectedSubtotal),
-                airpods.getItemId(),
-                TestUtil.mapToOrderItemResponse(addedOrderItems.get(airpods.getItemId()), airpodsExpectedSubtotal)
-        );
-
-        OrderResponseDto expectedResult =
-                TestUtil.mapToOrderResponseDto(order,
-                                               userProfile,
-                                               List.of(orderItemResponseByItemIds.get(macbook.getItemId()),
-                                                       orderItemResponseByItemIds.get(airpods.getItemId())),
-                                               orderExpectedTotal);
-
+        mockUserProfileRetrieval();
         doReturn(order)
-                .when(mapper).toEntity(orderCreateDto, USER_ID);
-
+                .when(mapper).toEntity(any(OrderCreateDto.class), anyLong());
         doReturn(Set.of(macbook, airpods))
                 .when(itemFacade).getByIds(anyCollection());
-
-        doAnswer(invocation -> {
-            OrderItemDtoRequest req = invocation.getArgument(0, OrderItemDtoRequest.class);
-            return Optional.ofNullable(addedOrderItems.get(req.itemId()))
-                           .orElseThrow(() -> new NoSuchElementException(
-                                   "Item with id {%s} should be added to order".formatted(req.itemId())));
-        }).when(orderItemMapper).toEntity(any(OrderItemDtoRequest.class), any(ItemSnapshot.class));
-
+        mockOrderItemMapperToEntity();
         doReturn(order)
                 .when(repository).saveAndFlush(any(Order.class));
-
-        doReturn(
-                Map.of(macbook.getItemId(), macbookExpectedSubtotal,
-                       airpods.getItemId(), airpodsExpectedSubtotal)
-        ).when(orderCalculator).calculateSubtotals(any(Order.class));
-
-        doReturn(orderExpectedTotal)
-                .when(orderCalculator).calculateOrderTotal(any(Order.class));
-
-        doAnswer(invocation ->
-                         convertOrderItemEntityToResponseDto(invocation, orderItemResponseByItemIds))
-                .when(orderItemMapper).toResponseDto(any(OrderItem.class), any(BigDecimal.class));
-
-        doReturn(userProfile)
-                .when(userServiceClient).getUserById(USER_ID);
-
-        doReturn(expectedResult)
-                .when(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+        mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
+        mockOrderItemMapperToResponseWithDummySubtotals();
+        mockOrderMapperToResponseWhenCreatedOrModified();
 
         OrderResponseDto actualResult = orderService.create(orderCreateDto, USER_ID);
 
-        assertThat(actualResult).isEqualTo(expectedResult);
+        assertAll(
+                () -> assertThat(actualResult.id()).isEqualTo(order.getId()),
+                () -> assertThat(actualResult.status()).isEqualTo(order.getStatus()),
+                () -> assertThat(actualResult.user()).isEqualTo(userProfile),
+                () -> assertThat(actualResult.orderItems())
+                        .hasSize(orderCreateDto.items().size())
+                        .allSatisfy(oi -> {
+                            assertThat(actualResult.orderItems())
+                                    .extracting(OrderItemDtoResponse::itemId)
+                                    .containsExactlyInAnyOrderElementsOf(expectedItems.keySet());
+                            assertThat(oi.quantity()).isEqualTo(expectedItems.get(oi.itemId()));
+                        }),
+                () -> assertThat(actualResult.total()).isEqualTo(BigDecimal.TEN)
+        );
+
         verify(userServiceClient).getUserById(anyLong());
         verify(mapper).toEntity(any(), any());
         verify(itemFacade).getByIds(anyCollection());
@@ -239,9 +204,9 @@ class OrderServiceImplTest {
                                                          OrderStatus.PENDING,
                                                          orderCreateDto.creationDate());
 
+        mockUserProfileRetrieval();
         doReturn(order)
                 .when(mapper).toEntity(orderCreateDto, USER_ID);
-
         doReturn(Set.of(iphone))
                 .when(itemFacade).getByIds(anyCollection());
 
@@ -280,7 +245,6 @@ class OrderServiceImplTest {
         );
     }
 
-
     @Test
     void getOrderByIdHappyPass() {
         LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
@@ -288,69 +252,25 @@ class OrderServiceImplTest {
                                                          USER_ID,
                                                          OrderStatus.FINISHED,
                                                          orderCreationDate);
-        int macbookQuantity = 1;
-        int iphoneQuantity = 1;
-        int airpodsQuantity = 2;
+        order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+        order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), iphone, 1));
+        order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), airpods, 2));
+        List<OrderItemDtoResponse> orderItemResponses =
+                order.getOrderItems()
+                     .stream()
+                     .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
+                     .toList();
 
-        // for OrderItemResponse map
-        Map<Long, OrderItem> addedOrderItems = Map.of(
-                macbook.getItemId(), TestUtil.getOrderItem(UUID.randomUUID(), macbook, macbookQuantity),
-                iphone.getItemId(), TestUtil.getOrderItem(UUID.randomUUID(), iphone, iphoneQuantity),
-                airpods.getItemId(), TestUtil.getOrderItem(UUID.randomUUID(), airpods, airpodsQuantity)
-        );
+        OrderResponseDto expectedResult = TestUtil.mapToOrderResponseDto(order,
+                                                                         userProfile,
+                                                                         orderItemResponses,
+                                                                         BigDecimal.TEN);
 
-        //assigning OrderItems to Order
-        addedOrderItems.values().forEach(order::addOrderItem);
-
-        //Calculating Order subTotals and totals
-        BigDecimal macbookExpectedSubtotal =
-                TestUtil.calculateOrderItemSubtotal(macbook.getItemPrice(), macbookQuantity);
-        BigDecimal iphoneExpectedSubtotal =
-                TestUtil.calculateOrderItemSubtotal(iphone.getItemPrice(), iphoneQuantity);
-        BigDecimal airpodsExpectedSubtotal =
-                TestUtil.calculateOrderItemSubtotal(macbook.getItemPrice(), airpodsQuantity);
-        BigDecimal orderExpectedTotal = macbookExpectedSubtotal
-                .add(iphoneExpectedSubtotal)
-                .add(airpodsExpectedSubtotal);
-
-        // for orderItemMapper.toDto() and expectedResult
-        Map<Long, OrderItemDtoResponse> orderItemResponseByItemIds = Map.of(
-                macbook.getItemId(),
-                TestUtil.mapToOrderItemResponse(addedOrderItems.get(macbook.getItemId()), macbookExpectedSubtotal),
-                iphone.getItemId(),
-                TestUtil.mapToOrderItemResponse(addedOrderItems.get(iphone.getItemId()), iphoneExpectedSubtotal),
-                airpods.getItemId(),
-                TestUtil.mapToOrderItemResponse(addedOrderItems.get(airpods.getItemId()), airpodsExpectedSubtotal)
-        );
-
-        OrderResponseDto expectedResult =
-                TestUtil.mapToOrderResponseDto(order,
-                                               userProfile,
-                                               List.of(orderItemResponseByItemIds.get(macbook.getItemId()),
-                                                       orderItemResponseByItemIds.get(iphone.getItemId()),
-                                                       orderItemResponseByItemIds.get(airpods.getItemId())
-                                               ),
-                                               orderExpectedTotal);
-
-        doReturn(userProfile)
-                .when(userServiceClient).getUserById(USER_ID);
-
+        mockUserProfileRetrieval();
         doReturn(Optional.of(order))
                 .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
-
-        doReturn(
-                Map.of(macbook.getItemId(), macbookExpectedSubtotal,
-                       iphone.getItemId(), iphoneExpectedSubtotal,
-                       airpods.getItemId(), airpodsExpectedSubtotal)
-        ).when(orderCalculator).calculateSubtotals(any(Order.class));
-
-        doReturn(orderExpectedTotal)
-                .when(orderCalculator).calculateOrderTotal(any(Order.class));
-
-        doAnswer(invocation ->
-                         convertOrderItemEntityToResponseDto(invocation, orderItemResponseByItemIds))
-                .when(orderItemMapper).toResponseDto(any(OrderItem.class), any(BigDecimal.class));
-
+        mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
+        mockOrderItemMapperToResponseWithDummySubtotals();
         doReturn(expectedResult)
                 .when(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
 
@@ -361,16 +281,14 @@ class OrderServiceImplTest {
         verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
         verify(orderCalculator).calculateSubtotals(any(Order.class));
         verify(orderCalculator).calculateOrderTotal(any(Order.class));
-        verify(orderItemMapper, times(addedOrderItems.size())).toResponseDto(any(OrderItem.class),
-                                                                             any(BigDecimal.class));
+        verify(orderItemMapper, times(order.getOrderItems().size())).toResponseDto(any(OrderItem.class),
+                                                                                   any(BigDecimal.class));
         verify(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
-
     }
 
     @Test
     void getOrderByShouldThrowOrderNotFound() {
-        doReturn(userProfile)
-                .when(userServiceClient).getUserById(USER_ID);
+        mockUserProfileRetrieval();
         doReturn(Optional.empty())
                 .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
 
@@ -424,10 +342,60 @@ class OrderServiceImplTest {
         verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
     }
 
-    private OrderItemDtoResponse convertOrderItemEntityToResponseDto(InvocationOnMock invocation,
-                                                                     Map<Long, OrderItemDtoResponse> orderItemResponseByItemIds) {
-        OrderItem orderItem = invocation.getArgument(0, OrderItem.class);
-        return Optional.ofNullable(orderItemResponseByItemIds.get(orderItem.getItem().getItemId()))
-                       .orElseThrow();
+    private void mockUserProfileRetrieval() {
+        doReturn(userProfile)
+                .when(userServiceClient).getUserById(USER_ID);
+    }
+
+    private void mockOrderCalculatorWithDummyValuesForMultipleOrders(Order... orders) {
+        doAnswer(invocation -> {
+            Order order = invocation.getArgument(0, Order.class);
+            return Arrays.stream(orders)
+                         .filter(o -> o.getId().equals(order.getId()))
+                         .findFirst()
+                         .map(this::calculateDummyOrderSubtotalsForOrderItems)
+                         .orElse(Map.of());
+        }).when(orderCalculator).calculateSubtotals(any(Order.class));
+
+        doReturn(BigDecimal.TEN).when(orderCalculator).calculateOrderTotal(any(Order.class));
+    }
+
+    private Map<Long, BigDecimal> calculateDummyOrderSubtotalsForOrderItems(Order o) {
+        return o.getOrderItems()
+                .stream()
+                .collect(Collectors.toMap(
+                        oi -> oi.getItem().getItemId(),
+                        oi -> BigDecimal.ONE
+                ));
+    }
+
+    private void mockOrderItemMapperToResponseWithDummySubtotals() {
+        doAnswer(invocation -> {
+            OrderItem orderItem = invocation.getArgument(0, OrderItem.class);
+            return TestUtil.mapToOrderItemResponse(orderItem, BigDecimal.ONE);
+        }).when(orderItemMapper).toResponseDto(any(OrderItem.class), any(BigDecimal.class));
+    }
+
+    private void mockOrderItemMapperToEntity() {
+        doAnswer(invocation -> {
+            OrderItemDtoRequest req = invocation.getArgument(0, OrderItemDtoRequest.class);
+            ItemSnapshot itemSnap = invocation.getArgument(1, ItemSnapshot.class);
+            return TestUtil.getOrderItem(UUID.randomUUID(), itemSnap, req.quantity());
+        }).when(orderItemMapper).toEntity(any(OrderItemDtoRequest.class), any(ItemSnapshot.class));
+    }
+
+    private void mockOrderMapperToResponseWhenCreatedOrModified() {
+        doAnswer(invocation -> {
+            Order orderArg = invocation.getArgument(0);
+            UserProfileDto userProfileArg = invocation.getArgument(1);
+            List<OrderItemDtoResponse> itemsArg = invocation.getArgument(2);
+            BigDecimal totalArg = invocation.getArgument(3);
+            return new OrderResponseDto(orderArg.getId(),
+                                        orderArg.getStatus(),
+                                        orderArg.getCreationDate(),
+                                        itemsArg,
+                                        totalArg,
+                                        userProfileArg);
+        }).when(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
     }
 }

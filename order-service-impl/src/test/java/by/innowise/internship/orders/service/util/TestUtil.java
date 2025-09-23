@@ -79,8 +79,4 @@ public class TestUtil {
                 userProfile);
     }
 
-    public BigDecimal calculateOrderItemSubtotal(BigDecimal price, Integer quantity) {
-        return price.multiply(BigDecimal.valueOf(quantity));
-    }
-
 }
