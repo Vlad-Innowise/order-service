@@ -1,9 +1,11 @@
 package by.innowise.internship.orders.service.util;
 
 import by.innowise.common.library.dto.UserProfileDto;
+import by.innowise.internship.orders.model.dto.item.ItemResponseDto;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoRequest;
 import by.innowise.internship.orders.model.dto.order.OrderItemDtoResponse;
 import by.innowise.internship.orders.model.dto.order.OrderResponseDto;
+import by.innowise.internship.orders.model.entity.Item;
 import by.innowise.internship.orders.model.entity.Order;
 import by.innowise.internship.orders.model.entity.OrderItem;
 import by.innowise.internship.orders.model.entity.OrderStatus;
@@ -50,6 +52,10 @@ public class TestUtil {
                            .itemName(itemName)
                            .itemPrice(itemPrice)
                            .build();
+    }
+
+    public ItemResponseDto mapToItemResponseDto(Item item) {
+        return new ItemResponseDto(item.getId(), item.getName(), item.getPrice(), item.getVersion());
     }
 
     public OrderItemDtoRequest getOrderItemDtoRequest(Long itemId, Integer quantity) {
