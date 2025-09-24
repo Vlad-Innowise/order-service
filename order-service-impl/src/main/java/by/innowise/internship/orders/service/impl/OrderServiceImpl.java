@@ -163,27 +163,39 @@ public class OrderServiceImpl implements OrderService {
 
         ItemsDiffResult preUpdateDiffResult = new ItemsDiffResult(
                 calculateItemIdsToAdd(updateDto, existingItemIds),
-                calculateItemIdsToUpdate(updateDto, existingItemIds),
+                calculateItemIdsToUpdate(updateDto, orderToUpdate),
                 calculateItemIdsToRemove(orderToUpdate, incomingUniqueItemIds)
         );
+        log.info("Calculated order modification result. Order items to add [{}], to update: [{}], to remove: [{}]",
+                 preUpdateDiffResult.toAdd().size(),
+                 preUpdateDiffResult.toUpdate().size(),
+                 preUpdateDiffResult.toRemove().size());
         return preUpdateDiffResult;
     }
 
-    private void createMissingOrderItems(OrderUpdateDto updateDto,
-                                         Order toUpdate,
+    private void createMissingOrderItems(OrderUpdateDto updateDto, Order toUpdate,
                                          ItemsDiffResult preUpdateDiffResult) {
 
-        Map<Long, ItemSnapshot> itemSnapshotsByItemId = fetchItemSnaphotsMapByItemIds(preUpdateDiffResult.toAdd());
-
-        updateDto.items()
-                 .stream()
-                 .filter(oiDto -> preUpdateDiffResult.toAdd().contains(oiDto.itemId()))
-                 .forEach(oiDto ->
-                                  mapToOrderItemAndAssign(toUpdate, oiDto, itemSnapshotsByItemId));
+        if (needToCreateAdditionalOrderItems(preUpdateDiffResult.toAdd())) {
+            updateOrderWithAdditionalOrderItems(updateDto, toUpdate, preUpdateDiffResult.toAdd());
+        }
     }
 
-    private void updateExistingOrderItems(OrderUpdateDto updateDto, Order order,
-                                          ItemsDiffResult preUpdateDiffResult) {
+    private void updateExistingOrderItems(OrderUpdateDto updateDto, Order order, ItemsDiffResult preUpdateDiffResult) {
+        if (needToUpdateExistingOrderItems(preUpdateDiffResult.toUpdate())) {
+            updateExistingOrderItemsForOrder(updateDto, order, preUpdateDiffResult.toUpdate());
+        }
+    }
+
+    private void clearRemovedOrderItems(Order order, ItemsDiffResult preUpdateDiffResult) {
+        order.getOrderItems()
+             .stream()
+             .filter(oi -> preUpdateDiffResult.toRemove().contains(oi.getItem().getItemId()))
+             .toList()
+             .forEach(order::removeOrderItem);
+    }
+
+    private void updateExistingOrderItemsForOrder(OrderUpdateDto updateDto, Order order, Set<Long> itemsToUpdate) {
         Map<Long, Integer> incomingQuantityByItemId =
                 updateDto.items()
                          .stream()
@@ -193,13 +205,27 @@ public class OrderServiceImpl implements OrderService {
 
         order.getOrderItems()
              .stream()
-             .filter(oi -> preUpdateDiffResult.toUpdate().contains(oi.getItem().getItemId()))
+             .filter(oi -> itemsToUpdate.contains(oi.getItem().getItemId()))
              .forEach(oi -> oi.setQuantity(incomingQuantityByItemId.get(oi.getItem().getItemId())));
     }
 
-    private void clearRemovedOrderItems(Order order, ItemsDiffResult preUpdateDiffResult) {
-        order.getOrderItems()
-             .removeIf(oi -> preUpdateDiffResult.toRemove().contains(oi.getItem().getItemId()));
+    private void updateOrderWithAdditionalOrderItems(OrderUpdateDto updateDto, Order toUpdate,
+                                                     Set<Long> itemsIdsToAdd) {
+        Map<Long, ItemSnapshot> itemSnapshotsByItemId = fetchItemSnaphotsMapByItemIds(itemsIdsToAdd);
+
+        updateDto.items()
+                 .stream()
+                 .filter(oiDto -> itemsIdsToAdd.contains(oiDto.itemId()))
+                 .forEach(oiDto ->
+                                  mapToOrderItemAndAssign(toUpdate, oiDto, itemSnapshotsByItemId));
+    }
+
+    private boolean needToCreateAdditionalOrderItems(Set<Long> idsToAdd) {
+        return !idsToAdd.isEmpty();
+    }
+
+    private boolean needToUpdateExistingOrderItems(Set<Long> itemsToUpdate) {
+        return !itemsToUpdate.isEmpty();
     }
 
     private Set<Long> calculateItemIdsToRemove(Order toUpdate, Set<Long> incomingUniqueItemIds) {
@@ -210,11 +236,22 @@ public class OrderServiceImpl implements OrderService {
                        .collect(Collectors.toSet());
     }
 
-    private Set<Long> calculateItemIdsToUpdate(OrderUpdateDto updateDto, Set<Long> existingItemIds) {
+    private Set<Long> calculateItemIdsToUpdate(OrderUpdateDto updateDto, Order orderToUpdate) {
+        Map<Long, Integer> orderItemsInitQuantity =
+                orderToUpdate.getOrderItems()
+                             .stream()
+                             .collect(Collectors.toMap(
+                                     oi -> oi.getItem().getItemId(),
+                                     OrderItem::getQuantity)
+                             );
         return updateDto.items()
                         .stream()
+                        .filter(oiReq ->
+                                        orderItemsInitQuantity.containsKey(oiReq.itemId()) &&
+                                                oiReq.quantity()
+                                                     .compareTo(orderItemsInitQuantity.get(oiReq.itemId())) != 0
+                        )
                         .map(OrderItemDtoRequest::itemId)
-                        .filter(existingItemIds::contains)
                         .collect(Collectors.toSet());
     }
 
