@@ -28,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +40,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -494,6 +496,336 @@ class OrderServiceImplTest {
 
             assertThrowsExactly(OrderNotFoundException.class, () -> orderService.getById(ORDER_2_ID, USER_ID));
             verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+        }
+    }
+
+    @DisplayName("testing order update functionality")
+    @Nested
+    class update {
+
+        @Test
+        void checkUpdatingQuantityForExistingOrderItem() {
+            // Existing order set up
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreationDate);
+
+            int airpodsInitialQuantity = 1;
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), airpods, airpodsInitialQuantity));
+
+            // Update order dto set up
+            int airpodsUpdatedQuantity = 2;
+            OrderUpdateDto updateDto =
+                    new OrderUpdateDto(ORDER_1_ID,
+                                       orderCreationDate,
+                                       List.of(TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1),
+                                               TestUtil.getOrderItemDtoRequest(airpods.getItemId(),
+                                                                               airpodsUpdatedQuantity)
+                                       ),
+                                       OrderStatus.PENDING);
+
+            // adjusting version and db update_at date
+            long currentVersion = order.getVersion();
+            LocalDateTime updatedDate = LocalDateTime.now();
+            order.setVersion(++currentVersion);
+            order.setUpdatedAt(updatedDate);
+
+            // setting the expected result
+            List<OrderItemDtoResponse> orderItemResponses =
+                    order.getOrderItems()
+                         .stream()
+                         .map(oi -> TestUtil.mapToOrderItemResponse(oi, BigDecimal.ONE))
+                         .toList();
+
+            OrderResponseDto expectedResult = TestUtil.mapToOrderResponseDto(order,
+                                                                             userProfile,
+                                                                             orderItemResponses,
+                                                                             BigDecimal.TEN);
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            doReturn(order)
+                    .when(mapper).updateEntity(any(OrderUpdateDto.class), any(Order.class), anyLong());
+            doReturn(order)
+                    .when(repository).saveAndFlush(any(Order.class));
+            mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
+            mockOrderItemMapperToResponseWithDummySubtotals();
+            doReturn(expectedResult)
+                    .when(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+
+            OrderResponseDto actualResult = orderService.update(updateDto, USER_ID);
+
+            assertThat(actualResult).isEqualTo(expectedResult);
+            verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            verify(mapper).updateEntity(any(OrderUpdateDto.class), any(Order.class), anyLong());
+            verify(repository).saveAndFlush(any(Order.class));
+            verify(orderCalculator).calculateSubtotals(any());
+            verify(orderCalculator).calculateOrderTotal(any());
+            verify(orderItemMapper, times(updateDto.items().size())).toResponseDto(any(), any());
+            verify(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+        }
+
+        @Test
+        void checkAddingNewOrderItemToOrder() {
+            // Existing order set up
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreationDate);
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+
+            // Update order dto set up
+            OrderItemDtoRequest newOrderItemToAdd = TestUtil.getOrderItemDtoRequest(iphone.getItemId(), 1);
+            OrderUpdateDto updateDto =
+                    new OrderUpdateDto(ORDER_1_ID,
+                                       orderCreationDate,
+                                       List.of(TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1),
+                                               newOrderItemToAdd
+                                       ),
+                                       OrderStatus.PENDING);
+
+            // adjusting version and db update_at date
+            long currentVersion = order.getVersion();
+            LocalDateTime updatedDate = LocalDateTime.now();
+            order.setVersion(++currentVersion);
+            order.setUpdatedAt(updatedDate);
+
+            //setting item ids with quantity to check the expected result
+            Map<Long, Integer> expectedItems =
+                    updateDto.items()
+                             .stream()
+                             .collect(Collectors.toMap(OrderItemDtoRequest::itemId,
+                                                       OrderItemDtoRequest::quantity));
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            doReturn(Set.of(iphone))
+                    .when(itemFacade).getByIds(anyCollection());
+            mockOrderItemMapperToEntity();
+            doReturn(order)
+                    .when(mapper).updateEntity(any(OrderUpdateDto.class), any(Order.class), anyLong());
+            doReturn(order)
+                    .when(repository).saveAndFlush(any(Order.class));
+            mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
+            mockOrderItemMapperToResponseWithDummySubtotals();
+            mockOrderMapperToResponseWhenCreatedOrModified();
+
+            OrderResponseDto actualResult = orderService.update(updateDto, USER_ID);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<Long>> itemSnapshotIdsToFetch = ArgumentCaptor.forClass(Collection.class);
+
+            assertAll(
+                    () -> assertThat(actualResult.id()).isEqualTo(order.getId()),
+                    () -> assertThat(actualResult.status()).isEqualTo(order.getStatus()),
+                    () -> assertThat(actualResult.user()).isEqualTo(userProfile),
+                    () -> assertThat(actualResult.orderItems())
+                            .hasSize(updateDto.items().size())
+                            .allSatisfy(oi -> {
+                                assertThat(actualResult.orderItems())
+                                        .extracting(OrderItemDtoResponse::itemId)
+                                        .containsExactlyInAnyOrderElementsOf(expectedItems.keySet());
+                                assertThat(oi.quantity()).isEqualTo(expectedItems.get(oi.itemId()));
+                            }),
+                    () -> assertThat(actualResult.total()).isEqualTo(BigDecimal.TEN)
+            );
+            verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            verify(itemFacade).getByIds(itemSnapshotIdsToFetch.capture());
+            verify(orderItemMapper, times(itemSnapshotIdsToFetch.getValue().size()))
+                    .toEntity(any(OrderItemDtoRequest.class), any(ItemSnapshot.class));
+            verify(mapper).updateEntity(any(OrderUpdateDto.class), any(Order.class), anyLong());
+            verify(repository).saveAndFlush(any(Order.class));
+            verify(orderCalculator).calculateSubtotals(any());
+            verify(orderCalculator).calculateOrderTotal(any());
+            verify(orderItemMapper, times(updateDto.items().size())).toResponseDto(any(), any());
+            verify(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+        }
+
+        @Test
+        void checkRemovingExistingOrderItemFromOrder() {
+            // Existing order set up
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreationDate);
+
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), airpods, 1));
+
+            // Update order dto set up
+            OrderUpdateDto updateDto =
+                    new OrderUpdateDto(ORDER_1_ID,
+                                       orderCreationDate,
+                                       List.of(TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1)),
+                                       OrderStatus.PENDING);
+
+            // adjusting version and db update_at date
+            long currentVersion = order.getVersion();
+            LocalDateTime updatedDate = LocalDateTime.now();
+            order.setVersion(++currentVersion);
+            order.setUpdatedAt(updatedDate);
+
+            //setting item ids with quantity to check the expected result
+            Map<Long, Integer> expectedItems =
+                    updateDto.items()
+                             .stream()
+                             .collect(Collectors.toMap(OrderItemDtoRequest::itemId,
+                                                       OrderItemDtoRequest::quantity));
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            doReturn(order)
+                    .when(mapper).updateEntity(any(OrderUpdateDto.class), any(Order.class), anyLong());
+            doReturn(order)
+                    .when(repository).saveAndFlush(any(Order.class));
+            mockOrderCalculatorWithDummyValuesForMultipleOrders(order);
+            mockOrderItemMapperToResponseWithDummySubtotals();
+            mockOrderMapperToResponseWhenCreatedOrModified();
+
+            OrderResponseDto actualResult = orderService.update(updateDto, USER_ID);
+
+            assertAll(
+                    () -> assertThat(actualResult.id()).isEqualTo(order.getId()),
+                    () -> assertThat(actualResult.status()).isEqualTo(order.getStatus()),
+                    () -> assertThat(actualResult.user()).isEqualTo(userProfile),
+                    () -> assertThat(actualResult.orderItems())
+                            .hasSize(updateDto.items().size())
+                            .allSatisfy(oi -> {
+                                assertThat(actualResult.orderItems())
+                                        .extracting(OrderItemDtoResponse::itemId)
+                                        .containsExactlyInAnyOrderElementsOf(expectedItems.keySet());
+                                assertThat(oi.quantity()).isEqualTo(expectedItems.get(oi.itemId()));
+                            }),
+                    () -> assertThat(actualResult.total()).isEqualTo(BigDecimal.TEN)
+            );
+            verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            verify(mapper).updateEntity(any(OrderUpdateDto.class), any(Order.class), anyLong());
+            verify(repository).saveAndFlush(any(Order.class));
+            verify(orderCalculator).calculateSubtotals(any());
+            verify(orderCalculator).calculateOrderTotal(any());
+            verify(orderItemMapper, times(updateDto.items().size())).toResponseDto(any(), any());
+            verify(mapper).toDto(any(Order.class), any(UserProfileDto.class), anyList(), any(BigDecimal.class));
+        }
+
+        @Test
+        void shouldThrowOrderNotFoundExceptionForMissingOrderIdOrOrderIdNotAssignedToCurrentUser() {
+            // Existing order set up
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+
+            // Update order dto set up
+            OrderUpdateDto updateDto =
+                    new OrderUpdateDto(MISSING_ORDER_ID,
+                                       orderCreationDate,
+                                       List.of(TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1)),
+                                       OrderStatus.PENDING);
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.empty())
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+
+            assertThrowsExactly(OrderNotFoundException.class, () -> orderService.update(updateDto, USER_ID));
+            verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+        }
+
+        @Test
+        void shouldThrowOrderModificationDeniedExceptionWhenOrderIsInFinishedOrderStatus() {
+            // Existing order set up
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.FINISHED,
+                                                             orderCreationDate);
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+
+            // Update order dto set up
+            OrderUpdateDto updateDto =
+                    new OrderUpdateDto(ORDER_1_ID,
+                                       orderCreationDate,
+                                       List.of(TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 2)),
+                                       OrderStatus.PENDING);
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+
+            assertThrowsExactly(OrderModificationDeniedException.class, () -> orderService.update(updateDto, USER_ID));
+
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+        }
+
+        @Test
+        void shouldThrowItemNotFoundExceptionInCaseOfTryingToAddMissingItemIdToExistingOrder() {
+            // Existing order set up
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreationDate);
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+
+            // Update order dto set up
+            long missingItemId = 999L;
+            OrderUpdateDto updateDto =
+                    new OrderUpdateDto(ORDER_1_ID,
+                                       orderCreationDate,
+                                       List.of(TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1),
+                                               TestUtil.getOrderItemDtoRequest(missingItemId, 1)
+                                       ),
+                                       OrderStatus.PENDING);
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            doReturn(Collections.emptySet())
+                    .when(itemFacade).getByIds(anyCollection());
+
+            assertThrowsExactly(ItemNotFoundException.class, () -> orderService.update(updateDto, USER_ID));
+            verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+            verify(itemFacade).getByIds(anyCollection());
+        }
+
+        @Test
+        void shouldThrowNotUniqueOrderItemExceptionWhenUpdateOrderDtoContainsNotUniqueItemIds() {
+
+            // Existing order set up
+            LocalDateTime orderCreationDate = LocalDateTime.of(LocalDate.of(2025, 9, 11), LocalTime.NOON);
+            Order order = TestUtil.getOrderWithoutOrderItems(ORDER_1_ID,
+                                                             USER_ID,
+                                                             OrderStatus.PENDING,
+                                                             orderCreationDate);
+            order.addOrderItem(TestUtil.getOrderItem(UUID.randomUUID(), macbook, 1));
+
+            // Update order dto set up
+            OrderItemDtoRequest notUniqueOrderItemToAdd = TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1);
+            OrderUpdateDto updateDto =
+                    new OrderUpdateDto(ORDER_1_ID,
+                                       orderCreationDate,
+                                       List.of(TestUtil.getOrderItemDtoRequest(macbook.getItemId(), 1),
+                                               notUniqueOrderItemToAdd
+                                       ),
+                                       OrderStatus.PENDING);
+
+            mockUserProfileRetrieval();
+            doReturn(Optional.of(order))
+                    .when(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
+
+            assertThrowsExactly(NotUniqueOrderItemException.class, () -> orderService.update(updateDto, USER_ID));
+            verify(userServiceClient).getUserById(anyLong());
+            verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
         }
     }
 
@@ -546,6 +878,5 @@ class OrderServiceImplTest {
 
             verify(repository).findByIdAndUserIdFetchOrderItems(any(UUID.class), anyLong());
         }
-
     }
 }
