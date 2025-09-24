@@ -1,4 +1,4 @@
-package by.innowise.internship.orders.service.util;
+package by.innowise.internship.orders.util;
 
 import by.innowise.common.library.dto.UserProfileDto;
 import by.innowise.internship.orders.model.dto.item.ItemResponseDto;

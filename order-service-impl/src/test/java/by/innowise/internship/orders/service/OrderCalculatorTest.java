@@ -4,7 +4,7 @@ import by.innowise.internship.orders.model.entity.Order;
 import by.innowise.internship.orders.model.entity.OrderItem;
 import by.innowise.internship.orders.model.entity.OrderStatus;
 import by.innowise.internship.orders.service.dto.ItemSnapshot;
-import by.innowise.internship.orders.service.util.TestUtil;
+import by.innowise.internship.orders.util.TestUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

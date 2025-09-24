@@ -21,7 +21,7 @@ import by.innowise.internship.orders.repository.OrderRepository;
 import by.innowise.internship.orders.service.OrderCalculator;
 import by.innowise.internship.orders.service.dto.ItemSnapshot;
 import by.innowise.internship.orders.service.facade.ItemFacade;
-import by.innowise.internship.orders.service.util.TestUtil;
+import by.innowise.internship.orders.util.TestUtil;
 import feign.FeignException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
