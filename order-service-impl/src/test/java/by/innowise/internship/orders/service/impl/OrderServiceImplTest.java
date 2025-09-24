@@ -104,9 +104,9 @@ class OrderServiceImplTest {
     @BeforeEach
     void prepareTest() {
 
-        macbook = TestUtil.getItem(1L, "Macbook", BigDecimal.valueOf(2100));
-        iphone = TestUtil.getItem(2L, "Iphone", BigDecimal.valueOf(1100));
-        airpods = TestUtil.getItem(3L, "Airpods", BigDecimal.valueOf(250));
+        macbook = TestUtil.getItemSnapshot(1L, "Macbook", BigDecimal.valueOf(2100));
+        iphone = TestUtil.getItemSnapshot(2L, "Iphone", BigDecimal.valueOf(1100));
+        airpods = TestUtil.getItemSnapshot(3L, "Airpods", BigDecimal.valueOf(250));
         userProfile = TestUtil.getUserProfile(USER_ID,
                                               "Test",
                                               "Testorson",

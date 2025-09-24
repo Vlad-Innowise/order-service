@@ -46,7 +46,7 @@ public class TestUtil {
                         .build();
     }
 
-    public ItemSnapshot getItem(Long itemId, String itemName, BigDecimal itemPrice) {
+    public ItemSnapshot getItemSnapshot(Long itemId, String itemName, BigDecimal itemPrice) {
         return ItemSnapshot.builder()
                            .itemId(itemId)
                            .itemName(itemName)
