@@ -1,0 +1,10 @@
+spring:
+
+  liquibase:
+    default-schema: 'app'
+
+application:
+  feign:
+    clients:
+      user-service:
+        url: "http://localhost:${wiremock.server.port}"
