@@ -35,4 +35,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.status=:status")
     List<Order> findAllByStatusWithAllOrderItems(@Param("status") OrderStatus status);
 
+
+    @EntityGraph(attributePaths = "orderItems")
+    List<Order> findAllByUserId(Long userId);
+
 }
