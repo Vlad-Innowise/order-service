@@ -14,6 +14,7 @@ services:
       ORDER_SERVICE_GH_REPO_NAME: "${ORDER_SERVICE_GH_REPO_NAME}"
       ORDER_SERVICE_IMAGE_NAME: "${ORDER_SERVICE_IMAGE_NAME}"
       TOKEN_SECRET: "${TOKEN_SECRET}"
+      KAFKA_BOOTSTRAP_URL: "kafka:9092"
       JAVA_TOOL_OPTIONS: '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007'
     ports:
       - '9009:8080'

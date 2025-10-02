@@ -27,6 +27,9 @@ spring:
       hibernate:
         default_schema: 'app'
 
+  kafka:
+    bootstrap-servers: "${KAFKA_BOOTSTRAP_URL}"
+
   liquibase:
     enabled: 'true'
     change-log: 'classpath:/db/changelog/db.changelog-master.yml'
