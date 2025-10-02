@@ -4,7 +4,7 @@ import by.innowise.internship.orders.model.dto.order.OrderCreateDto;
 import by.innowise.internship.orders.model.dto.order.OrderResponseDto;
 import by.innowise.internship.orders.model.dto.order.OrderUpdateDto;
 import by.innowise.internship.orders.model.entity.OrderStatus;
-import by.innowise.internship.orders.service.OrderService;
+import by.innowise.internship.orders.service.facade.OrderFacade;
 import by.innowise.internship.security.dto.UserHolder;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -36,14 +36,14 @@ import java.util.UUID;
 @Validated
 public class OrderController {
 
-    private final OrderService orderService;
+    private final OrderFacade orderFacade;
 
     @PostMapping
     public ResponseEntity<OrderResponseDto> createOrder(@RequestBody @Valid OrderCreateDto createDto,
                                                         @AuthenticationPrincipal UserHolder userHolder) {
         Long authId = userHolder.crossServiceUserId();
         log.info("Requested to create an order: {} for user: {}", createDto, authId);
-        OrderResponseDto created = orderService.create(createDto, authId);
+        OrderResponseDto created = orderFacade.create(createDto, authId);
         log.info("Created an order: {}", created);
         return ResponseEntity.ok(created);
     }
@@ -53,7 +53,7 @@ public class OrderController {
                                                      @AuthenticationPrincipal UserHolder userHolder) {
         Long authId = userHolder.crossServiceUserId();
         log.info("Requested to get the order by id: {} for user: {}", orderId, authId);
-        OrderResponseDto found = orderService.getById(orderId, authId);
+        OrderResponseDto found = orderFacade.getById(orderId, authId);
         log.info("Retrieved the order: {}", found);
         return ResponseEntity.ok(found);
     }
@@ -66,7 +66,7 @@ public class OrderController {
                                                                  Pageable pageable) {
         Long authId = userHolder.crossServiceUserId();
         log.info("Requested to get orders: {} by for user: {}", ids, authId);
-        List<OrderResponseDto> orders = orderService.getAllByIds(ids, authId, pageable);
+        List<OrderResponseDto> orders = orderFacade.getAllByIds(ids, authId, pageable);
         log.info("Sending the order responses: {}", orders);
         return ResponseEntity.ok(orders);
     }
@@ -76,7 +76,7 @@ public class OrderController {
                                                                     @AuthenticationPrincipal UserHolder userHolder) {
         Long authId = userHolder.crossServiceUserId();
         log.info("Requested to get orders by status:{} for user: {}", status, authId);
-        List<OrderResponseDto> orders = orderService.getAllByStatus(authId, status);
+        List<OrderResponseDto> orders = orderFacade.getAllByStatus(authId, status);
         List<UUID> orderIds = orders.stream()
                                     .map(OrderResponseDto::id)
                                     .toList();
@@ -89,7 +89,7 @@ public class OrderController {
                                                         @AuthenticationPrincipal UserHolder userHolder) {
         Long authId = userHolder.crossServiceUserId();
         log.info("Requested to update order with id: {} for user: {}", updateDto.id(), authId);
-        OrderResponseDto updated = orderService.update(updateDto, authId);
+        OrderResponseDto updated = orderFacade.update(updateDto, authId);
         log.info("Sending updated order to a client: {}", updated);
         return ResponseEntity.ok(updated);
     }
@@ -99,7 +99,7 @@ public class OrderController {
                                            @AuthenticationPrincipal UserHolder userHolder) {
         Long authId = userHolder.crossServiceUserId();
         log.info("Requested to delete the order: {} for user: {}", orderId, authId);
-        orderService.delete(orderId, authId);
+        orderFacade.delete(orderId, authId);
         log.info("Order: {} deleted successfully", orderId);
         return ResponseEntity.ok()
                              .build();
