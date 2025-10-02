@@ -142,6 +142,18 @@ public class OrderServiceImpl implements OrderService {
         return calculateTotalsAndGetOrderResponse(updatedOrder, userProfileDto);
     }
 
+    @Override
+    public OrderResponseDto updateStatus(UUID orderId, Long userId, OrderStatus newStatus) {
+        log.info("Requested to update order: {} with status: {}", orderId, newStatus);
+        Order order = getOrderByIdAndUserId(orderId, userId);
+        checkIfModificationAllowed(order);
+        order.setStatus(newStatus);
+        repository.saveAndFlush(order);
+        log.info("Updated order with new status: {} pre-saved in DB", order);
+        UserProfileDto userProfileDto = retrieveUserProfile(userId);
+        return calculateTotalsAndGetOrderResponse(order, userProfileDto);
+    }
+
     @Transactional
     @Override
     public void delete(UUID orderId, Long userId) {
