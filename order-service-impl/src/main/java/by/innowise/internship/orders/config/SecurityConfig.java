@@ -15,14 +15,15 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import java.util.Collections;
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private static final List<String> WHITELIST_PATHS = Collections.emptyList();
+    private static final List<String> WHITELIST_PATHS = List.of(
+            "/actuator/health", "/actuator/health/**"
+    );
 
     @Bean
     public JwtFilterConfigurer whitelistConfigurer() {
