@@ -15,6 +15,8 @@ public interface OrderFacade {
 
     OrderResponseDto getById(UUID id, Long userId);
 
+    List<OrderResponseDto> getAll(Long userId);
+
     List<OrderResponseDto> getAllByIds(List<UUID> orderIds, Long userId, Pageable pageable);
 
     List<OrderResponseDto> getAllByStatus(Long userId, OrderStatus status);
@@ -22,5 +24,4 @@ public interface OrderFacade {
     OrderResponseDto update(OrderUpdateDto updateDto, Long userId);
 
     void delete(UUID orderId, Long userId);
-
 }

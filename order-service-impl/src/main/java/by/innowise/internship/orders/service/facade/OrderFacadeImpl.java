@@ -38,6 +38,11 @@ public class OrderFacadeImpl implements OrderFacade {
     }
 
     @Override
+    public List<OrderResponseDto> getAll(Long userId) {
+        return orderService.getAll(userId);
+    }
+
+    @Override
     public List<OrderResponseDto> getAllByIds(List<UUID> orderIds, Long userId, Pageable pageable) {
         return orderService.getAllByIds(orderIds, userId, pageable);
     }

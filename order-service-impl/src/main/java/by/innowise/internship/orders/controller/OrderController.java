@@ -58,6 +58,15 @@ public class OrderController {
         return ResponseEntity.ok(found);
     }
 
+    @GetMapping
+    public ResponseEntity<List<OrderResponseDto>> getAllOrders(@AuthenticationPrincipal UserHolder userHolder) {
+        Long authId = userHolder.crossServiceUserId();
+        log.info("Requested to get all orders for user: {}", authId);
+        List<OrderResponseDto> orders = orderFacade.getAll(authId);
+        log.info("Sending orders: [{}] to the client ", orders.size());
+        return ResponseEntity.ok(orders);
+    }
+
     @GetMapping("/by-ids")
     public ResponseEntity<List<OrderResponseDto>> getOrdersByIds(@RequestParam("id") @NotEmpty List<UUID> ids,
                                                                  @AuthenticationPrincipal UserHolder userHolder,

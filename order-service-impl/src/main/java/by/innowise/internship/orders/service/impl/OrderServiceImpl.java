@@ -79,6 +79,21 @@ public class OrderServiceImpl implements OrderService {
 
     @Transactional(readOnly = true)
     @Override
+    public List<OrderResponseDto> getAll(Long userId) {
+        UserProfileDto userProfileDto = retrieveUserProfile(userId);
+        List<Order> orders = repository.findAllByUserId(userId);
+        Set<UUID> retrievedOrderIds = orders.stream()
+                                            .map(Order::getId)
+                                            .collect(Collectors.toSet());
+
+        log.info("Retrieved all orders: {} for user: {}", retrievedOrderIds, userId);
+        return orders.stream()
+                     .map(order -> calculateTotalsAndGetOrderResponse(order, userProfileDto))
+                     .toList();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
     public List<OrderResponseDto> getAllByIds(List<UUID> orderIds, Long userId, Pageable pageable) {
         UserProfileDto userProfileDto = retrieveUserProfile(userId);
         Set<UUID> idsToFind = new HashSet<>(orderIds);
