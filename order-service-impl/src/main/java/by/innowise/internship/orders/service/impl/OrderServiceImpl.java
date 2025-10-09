@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -410,7 +411,8 @@ public class OrderServiceImpl implements OrderService {
 
     private void checkIfModificationAllowed(Order order) {
         log.info("Checking the order's: {} status prior to modifying", order.getId());
-        if (order.getStatus() == OrderStatus.FINISHED) {
+        EnumSet<OrderStatus> nonModifiableOrderStatuses = EnumSet.of(OrderStatus.FINISHED, OrderStatus.CANCELLED);
+        if (nonModifiableOrderStatuses.contains(order.getStatus())) {
             throw new OrderModificationDeniedException(
                     "Modifying of the order {%s} cannot be performed! Order is in [%s] status"
                             .formatted(order.getId(), OrderStatus.FINISHED.name()), HttpStatus.BAD_REQUEST);
