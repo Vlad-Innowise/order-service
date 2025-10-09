@@ -1,0 +1,36 @@
+databaseChangeLog:
+
+  - include:
+      file: changeset/db.changelog-20250911_001_create-items-table.sql
+      relativeToChangelogFile: true
+      logicalFilePath: create-items-table
+
+  - include:
+      file: changeset/db.changelog-20250911_002_create-orders-table.sql
+      relativeToChangelogFile: true
+      logicalFilePath: create-orders-table
+
+  - include:
+      file: changeset/db.changelog-20250911_003_create-order-items-table.sql
+      relativeToChangelogFile: true
+      logicalFilePath: create-order-items-table
+
+  - include:
+      file: changeset/db.changelog-20250911_004-create-items-name_idx.sql
+      relativeToChangelogFile: true
+      logicalFilePath: create-items-name_idx
+
+  - include:
+      file: changeset/db.changelog-20250911_005-create-orders-user_id_idx.sql
+      relativeToChangelogFile: true
+      logicalFilePath: create-orders-user_id_idx
+
+  - include:
+      file: changeset/db.changelog-20250911_006-create-orders-items-indexes.sql
+      relativeToChangelogFile: true
+      logicalFilePath: create-orders-items-indexes
+
+  - include:
+      file: changeset/db.changelog-20250911_007-create-initial-data.sql
+      relativeToChangelogFile: true
+      logicalFilePath: create-initial-data

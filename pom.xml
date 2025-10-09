@@ -7,11 +7,118 @@
     <groupId>by.innowise.internship</groupId>
     <artifactId>order-service</artifactId>
     <version>1.0.0</version>
+    <packaging>pom</packaging>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <java.version>21</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <spring-boot.version>3.5.3</spring-boot.version>
+        <!--plugins-->
+        <maven.compiler.version>3.14.0</maven.compiler.version>
+        <maven-failsafe-plugin.version>3.5.3</maven-failsafe-plugin.version>
+        <spring-boot-maven-plugin.version>${spring-boot.version}</spring-boot-maven-plugin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!--dependencies-->
+        <common-security-starter.version>1.1.5</common-security-starter.version>
+        <common-lib.version>1.2.0</common-lib.version>
+        <preliquibase.version>1.6.0</preliquibase.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
+        <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
+        <testcontainers.version>1.21.3</testcontainers.version>
+        <spring-cloud.version>2025.0.0</spring-cloud.version>
     </properties>
+
+    <modules>
+        <module>order-service-impl</module>
+    </modules>
+
+    <repositories>
+        <repository>
+            <id>innowise-security-starter</id>
+            <url>https://maven.pkg.github.com/Vlad-Innowise/common-security-starter</url>
+        </repository>
+        <repository>
+            <id>innowise-common-lib</id>
+            <url>https://maven.pkg.github.com/Vlad-Innowise/common-lib</url>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>net.lbruun.springboot</groupId>
+                <artifactId>preliquibase-spring-boot-starter</artifactId>
+                <version>${preliquibase.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok-mapstruct-binding</artifactId>
+                <version>${lombok-mapstruct-binding.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>by.innowise.internship</groupId>
+                <artifactId>common-security-starter</artifactId>
+                <version>${common-security-starter.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>by.innowise.internship</groupId>
+                <artifactId>common-lib</artifactId>
+                <version>${common-lib.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven.compiler.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-failsafe-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 
 </project>

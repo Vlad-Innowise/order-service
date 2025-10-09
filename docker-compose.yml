@@ -1,0 +1,47 @@
+services:
+
+  order-service:
+    build: ./order-service-impl
+    image: "ghcr.io/${GITHUB_INNOWISE_USERNAME}/${ORDER_SERVICE_GH_REPO_NAME}/${ORDER_SERVICE_IMAGE_NAME}"
+    environment:
+      SPRING_PROFILES_ACTIVE: "${APPLICATION_PROFILE}"
+      DB_URL: "jdbc:postgresql://order-service-db:5432/${ORDER_SERVICE_DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      USER_SERVICE_URL: 'http://user-service:8080'
+      GITHUB_INNOWISE_USERNAME: "${GITHUB_INNOWISE_USERNAME}"
+      GITHUB_INNOWISE_TOKEN: "${GITHUB_INNOWISE_TOKEN}"
+      ORDER_SERVICE_GH_REPO_NAME: "${ORDER_SERVICE_GH_REPO_NAME}"
+      ORDER_SERVICE_IMAGE_NAME: "${ORDER_SERVICE_IMAGE_NAME}"
+      TOKEN_SECRET: "${TOKEN_SECRET}"
+      KAFKA_BOOTSTRAP_URL: "kafka:9092"
+      JAVA_TOOL_OPTIONS: '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007'
+    ports:
+      - '9009:8080'
+      - '5007:5007'
+    expose:
+      - '9009' # application api
+      - '5007' # debug
+    restart: 'always'
+    depends_on:
+      - 'order-service-db'
+
+  order-service-db:
+    image: 'postgres:17-alpine'
+    environment:
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_DB: "${ORDER_SERVICE_DB_NAME}"
+    ports:
+      - '6666:5432'
+    volumes:
+      - 'pg-order-service-vol:/var/lib/postgresql/data'
+    restart: 'always'
+
+volumes:
+  pg-order-service-vol:
+
+networks:
+  default:
+    external: true
+    name: 'innowise-net'

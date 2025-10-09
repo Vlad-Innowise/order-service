@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: 'order-service'
+
+  profiles:
+    active: "${APPLICATION_PROFILE}"
+
+  datasource:
+    url: "${DB_URL}"
+    username: "${DB_USER}"
+    password: "${DB_PASSWORD}"
+    hikari:
+      maximum-pool-size: 20
+
+  data:
+    web:
+      pageable:
+        default-page-size: 5
+        max-page-size: 50
+        one-indexed-parameters: 'true'
+
+  jpa:
+    hibernate:
+      ddl-auto: 'validate'
+    show-sql: 'true'
+    properties:
+      hibernate:
+        default_schema: 'app'
+
+  kafka:
+    bootstrap-servers: "${KAFKA_BOOTSTRAP_URL}"
+
+  liquibase:
+    enabled: 'true'
+    change-log: 'classpath:/db/changelog/db.changelog-master.yml'
+    default-schema: 'app'
+
+logging:
+  level:
+    root: 'info'
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: 'health,info'
+  endpoint:
+    health:
+      probes:
+        enabled: 'true'
+  health:
+    livenessState:
+      enabled: 'true'
+    readinessState:
+      enabled: 'true'
+
+# Custom properties
+application:
+  security:
+    enabled: 'true'
+    secretKey: "${TOKEN_SECRET}"
+  feign:
+    clients:
+      user-service:
+        url: "${USER_SERVICE_URL}"

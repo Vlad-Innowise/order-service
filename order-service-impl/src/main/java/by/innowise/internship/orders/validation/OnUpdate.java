@@ -1,0 +1,4 @@
+package by.innowise.internship.orders.validation;
+
+public interface OnUpdate {
+}
