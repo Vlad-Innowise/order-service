@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 public enum OrderStatus {
 
     PENDING,
+    PROCESSING,
     FINISHED,
     CANCELLED;
 
