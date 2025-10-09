@@ -35,7 +35,7 @@ public class PaymentListener {
     }
 
     public OrderStatus convertPaymentEventStatusToOrderStatus(PaymentEventStatus status) {
-        return isPaymentSucceed(status) ? OrderStatus.FINISHED : OrderStatus.CANCELLED;
+        return isPaymentSucceed(status) ? OrderStatus.FINISHED : OrderStatus.PENDING;
     }
 
     private boolean isPaymentSucceed(PaymentEventStatus status) {
