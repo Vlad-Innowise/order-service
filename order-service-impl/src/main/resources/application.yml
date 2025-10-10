@@ -38,6 +38,9 @@ spring:
 logging:
   level:
     root: 'info'
+    org.springframework.kafka.listener.DeadLetterPublishingRecoverer: 'DEBUG'
+    org.springframework.kafka.listener.DefaultErrorHandler: 'DEBUG'
+    org.apache.kafka.clients.producer: 'DEBUG'
 
 management:
   endpoints:

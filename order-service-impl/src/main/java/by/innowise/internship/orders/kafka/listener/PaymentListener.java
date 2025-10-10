@@ -31,6 +31,7 @@ public class PaymentListener {
             ack.acknowledge();
         } catch (Exception e) {
             log.error("Failed to process payment-created-event: {}", event, e);
+            throw e;
         }
     }
 
