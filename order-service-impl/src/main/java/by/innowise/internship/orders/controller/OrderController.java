@@ -18,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -100,6 +101,17 @@ public class OrderController {
         log.info("Requested to update order with id: {} for user: {}", updateDto.id(), authId);
         OrderResponseDto updated = orderFacade.update(updateDto, authId);
         log.info("Sending updated order to a client: {}", updated);
+        return ResponseEntity.ok(updated);
+    }
+
+    @PatchMapping("/{orderId}")
+    public ResponseEntity<OrderResponseDto> updateOrderStatus(@PathVariable UUID orderId,
+                                                              @RequestParam OrderStatus newStatus,
+                                                              @AuthenticationPrincipal UserHolder userHolder) {
+        Long authId = userHolder.crossServiceUserId();
+        log.info("User: {} initiated request to update order: {} to status: [{}]", authId, orderId, newStatus);
+        OrderResponseDto updated = orderFacade.updateStatus(orderId, authId, newStatus);
+        log.info("Order: {} successfully updated to status: [{}]", updated.id(), updated.status());
         return ResponseEntity.ok(updated);
     }
 

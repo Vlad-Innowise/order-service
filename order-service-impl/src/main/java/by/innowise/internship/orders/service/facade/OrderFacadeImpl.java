@@ -58,6 +58,11 @@ public class OrderFacadeImpl implements OrderFacade {
     }
 
     @Override
+    public OrderResponseDto updateStatus(UUID orderId, Long userId, OrderStatus newStatus) {
+        return orderService.updateStatus(orderId,userId,newStatus);
+    }
+
+    @Override
     public void delete(UUID orderId, Long userId) {
         orderService.delete(orderId, userId);
     }
