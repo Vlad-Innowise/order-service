@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/items")
 @Slf4j
@@ -40,6 +42,14 @@ public class ItemController {
         ItemResponseDto found = itemService.getById(id);
         log.info("Sending found item to a client: {}", found);
         return ResponseEntity.ok(found);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<ItemResponseDto>> getAll() {
+        log.info("Requested to get all items");
+        List<ItemResponseDto> items = itemService.getAll();
+        log.info("Sending found items of size: [{}] to the client", items.size());
+        return ResponseEntity.ok(items);
     }
 
     @PutMapping

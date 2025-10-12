@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -40,6 +41,17 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public ItemResponseDto getById(Long id) {
         return mapper.toDto(getItemById(id));
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<ItemResponseDto> getAll() {
+        log.info("Requested all items from DB");
+        List<Item> foundItems = repository.findAll();
+        log.info("Items found: {}", foundItems.size());
+        return foundItems.stream()
+                         .map(mapper::toDto)
+                         .toList();
     }
 
     @Transactional(readOnly = true)

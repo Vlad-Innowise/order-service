@@ -5,6 +5,7 @@ import by.innowise.internship.orders.model.dto.item.ItemResponseDto;
 import by.innowise.internship.orders.service.dto.ItemSnapshot;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 public interface ItemService {
@@ -12,6 +13,8 @@ public interface ItemService {
     ItemResponseDto create(ItemRequestDto dto);
 
     ItemResponseDto getById(Long id);
+
+    List<ItemResponseDto> getAll();
 
     Set<ItemSnapshot> getAllByIds(Collection<Long> idsToFind);
 
